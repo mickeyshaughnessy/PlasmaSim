@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>2D Plasma Simulator</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #080818;
+  color: #dde;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+#canvas { cursor: crosshair; display: block; }
+#panel {
+  width: 238px;
+  min-width: 238px;
+  padding: 12px 11px;
+  background: #0b0b20;
+  border-left: 1px solid #1a1a32;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+h1 { font-size: 14px; color: #99bbff; letter-spacing: 0.04em; }
+.sep { border-top: 1px solid #161628; }
+lbl { font-size: 11px; color: #7788aa; display: block; margin-bottom: 3px; }
+input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
+.val { font-size: 10px; color: #445566; }
+.btn {
+  padding: 5px 8px;
+  border: 1px solid #222244;
+  background: #0e0e2a;
+  color: #c8d4f0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: center;
+  transition: background 0.1s;
+}
+.btn:hover { background: #1c1c3e; }
+.btn.active { outline: 1.5px solid currentColor; outline-offset: -1.5px; background: #181840; }
+/* Particle type selector */
+#ptype-row { display: flex; gap: 3px; }
+.ptype-btn {
+  flex: 1;
+  padding: 5px 2px;
+  border: 1px solid #22223a;
+  background: #0e0e28;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: bold;
+  text-align: center;
+  transition: background 0.1s;
+  line-height: 1.4;
+}
+.ptype-btn:hover  { background: #1a1a3a; }
+.ptype-btn.active { outline: 1.5px solid currentColor; outline-offset: -1.5px; background: #161644; }
+/* Geometry toggle */
+.geo-row { display: flex; gap: 5px; }
+.geo-btn { flex: 1; }
+/* Presets grid */
+.preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+/* Stats */
+#stats { font-size: 11px; line-height: 1.9; }
+.srow { display: flex; justify-content: space-between; }
+.sv   { color: #aabbdd; }
+/* Action row */
+.act-row { display: flex; gap: 4px; }
+.act-row .btn { flex: 1; }
+/* Hint footer */
+.hint { font-size: 10px; color: #334; line-height: 1.6; margin-top: auto; padding-top: 6px; }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="panel">
+  <h1>⚡ Plasma Simulator</h1>
+
+  <!-- Particle type selector -->
+  <div>
+    <lbl>Click canvas to add:</lbl>
+    <div id="ptype-row"><!-- built by JS --></div>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- Temperature -->
+  <div>
+    <lbl>Temperature</lbl>
+    <input type="range" id="sl-temp" min="0" max="10" step="0.1" value="2">
+    <div class="val" id="v-temp">T = 2.0</div>
+  </div>
+
+  <!-- B field -->
+  <div>
+    <lbl>Magnetic Field (B⊥)</lbl>
+    <input type="range" id="sl-b" min="-3" max="3" step="0.05" value="0">
+    <div class="val" id="v-b">B = 0.00</div>
+  </div>
+
+  <!-- Coulomb -->
+  <div>
+    <lbl>Coulomb Strength</lbl>
+    <input type="range" id="sl-k" min="0.1" max="6" step="0.1" value="1.2">
+    <div class="val" id="v-k">k = 1.2</div>
+  </div>
+
+  <!-- Damping -->
+  <div>
+    <lbl>Damping</lbl>
+    <input type="range" id="sl-damp" min="0.95" max="1.0" step="0.001" value="0.999">
+    <div class="val" id="v-damp">0.999</div>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- Geometry -->
+  <div>
+    <lbl>Boundary</lbl>
+    <div class="geo-row">
+      <button class="btn geo-btn active" id="btn-torus" onclick="setGeo('torus')">⭕ Torus</button>
+      <button class="btn geo-btn"        id="btn-box"   onclick="setGeo('box')">⬜ Box</button>
+    </div>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- Presets -->
+  <div>
+    <lbl>Presets</lbl>
+    <div class="preset-grid">
+      <button class="btn" onclick="loadPreset('neutral')">Neutral</button>
+      <button class="btn" onclick="loadPreset('dt')">D-T Fusion</button>
+      <button class="btn" onclick="loadPreset('beam')">Beam</button>
+      <button class="btn" onclick="loadPreset('vortex')">Vortex</button>
+      <button class="btn" onclick="loadPreset('twostream')">Two-Stream</button>
+      <button class="btn" onclick="loadPreset('hot')">Hot Mix</button>
+    </div>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- Particle flow -->
+  <div>
+    <lbl>Injection rate <span id="inject-note" style="color:#445566;font-size:10px">(live presets only)</span></lbl>
+    <input type="range" id="sl-inject" min="0" max="10" step="0.5" value="2">
+    <div class="val" id="v-inject">2.0</div>
+  </div>
+  <div>
+    <lbl>Exhaust rate</lbl>
+    <input type="range" id="sl-exhaust" min="0" max="10" step="0.5" value="0">
+    <div class="val" id="v-exhaust">Off</div>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- Stats -->
+  <div id="stats"></div>
+
+  <div class="sep"></div>
+
+  <!-- Actions -->
+  <div class="act-row">
+    <button class="btn" id="btn-pause"  onclick="togglePause()">⏸ Pause</button>
+    <button class="btn" id="btn-reset"  onclick="resetSim()">↺ Reset</button>
+    <button class="btn"                 onclick="clearAll()">✕ Clear</button>
+  </div>
+
+  <div class="hint">
+    Click canvas to place particles.<br>
+    <span style="color:#44ccff">²D</span> + <span style="color:#44ffaa">³T</span>
+    → <span style="color:#ffee44">⁴He</span> + flash when close!<br>
+    Torus: edges wrap (ghosts shown).
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ─── Canvas ───────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+function resize() {
+  canvas.width  = window.innerWidth  - 238;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── Particle species ─────────────────────────────────────
+const SPECIES = {
+  'e':  { label: 'e⁻',  mass: 0.04, charge: -1, color: '#4477ff', glow: [60,100,255],  r: 3   },
+  'H':  { label: '¹H',  mass: 1,    charge:  1, color: '#ff8844', glow: [255,136,68],   r: 4.5 },
+  'D':  { label: '²D',  mass: 2,    charge:  1, color: '#44ccff', glow: [68,200,255],   r: 5.5 },
+  'T':  { label: '³T',  mass: 3,    charge:  1, color: '#44ffaa', glow: [68,255,170],   r: 6   },
+  'He': { label: '⁴He', mass: 4,    charge:  2, color: '#ffee44', glow: [255,238,68],   r: 7   },
+};
+
+// Fusion reactions: key = sorted(typeA, typeB).join('+')
+const REACTIONS = {
+  'D+T':   { product: 'He', kick: 9,  name: 'D+T → ⁴He' },
+  'D+D':   { product: 'T',  kick: 5,  name: 'D+D → ³T'  },
+  'H+H':   { product: 'D',  kick: 2.5,name: 'H+H → ²D'  },
+  'H+T':   { product: 'He', kick: 6,  name: 'H+T → ⁴He' },
+  'H+D':   { product: 'T',  kick: 4,  name: 'H+D → ³T'  },
+};
+
+// ─── Simulation constants ──────────────────────────────────
+const SOFT        = 12;
+const DT          = 0.35;
+const TRAIL_MAX   = 22;
+const FUSION_R    = 12;
+const FUSION_PROB = 0.022;
+const MAX_SPD     = 48;
+const GHOST_DIST  = 55;   // torus ghost rendering margin
+
+// ─── State ────────────────────────────────────────────────
+let particles    = [];
+let flashes      = [];
+let paused       = false;
+let addMode      = 'H';
+let B            = 0;
+let k            = 1.2;
+let damping      = 0.999;
+let temperature  = 2;
+let geometry     = 'torus';
+let fusionCount  = 0;
+let savedState   = null;
+let activePreset = null;   // preset currently injecting particles
+let frameCount   = 0;
+let injectEvery  = 50;     // frames between injections (0 = off)
+let exhaustEvery = 0;      // frames between removals  (0 = off)
+const INJECT_CAP = 160;    // max particles before injection pauses
+
+// Map slider 0-10 → frame interval (0 = off, 10 = every 10 frames)
+function rateToEvery(r) { return r <= 0 ? 0 : Math.max(10, Math.round(100 / r)); }
+
+// ─── Particle class ───────────────────────────────────────
+class Particle {
+  constructor(x, y, vx, vy, type) {
+    this.x = x; this.y = y;
+    this.vx = vx; this.vy = vy;
+    this.type   = type;
+    this.mass   = SPECIES[type].mass;
+    this.charge = SPECIES[type].charge;
+    this.trail  = [];
+  }
+  clone() {
+    const p = new Particle(this.x, this.y, this.vx, this.vy, this.type);
+    p.trail = this.trail.map(pt => ({ x: pt.x, y: pt.y }));
+    return p;
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────
+function gauss() {
+  // Box-Muller (guard against log(0))
+  const u1 = Math.max(1e-10, Math.random());
+  const u2 = Math.random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+function thermalV(type) {
+  const sigma = Math.sqrt(Math.max(0.01, temperature) / SPECIES[type].mass);
+  return { vx: sigma * gauss(), vy: sigma * gauss() };
+}
+
+function mkParticle(x, y, type) {
+  const { vx, vy } = thermalV(type);
+  return new Particle(x, y, vx, vy, type);
+}
+
+function minImg(d, L) {
+  if (d >  L * 0.5) return d - L;
+  if (d < -L * 0.5) return d + L;
+  return d;
+}
+
+// ─── Preset state persistence ─────────────────────────────
+function saveInitial() {
+  savedState = particles.map(p => p.clone());
+}
+
+function resetSim() {
+  if (!savedState) return;
+  particles   = savedState.map(p => p.clone());
+  flashes     = [];
+  fusionCount = 0;
+}
+
+function clearAll() {
+  particles = []; flashes = []; fusionCount = 0; savedState = null; activePreset = null;
+}
+
+// ─── UI builders ──────────────────────────────────────────
+// Particle type buttons
+const ptypeRow = document.getElementById('ptype-row');
+for (const [id, sp] of Object.entries(SPECIES)) {
+  const b = document.createElement('button');
+  b.className   = 'ptype-btn' + (id === addMode ? ' active' : '');
+  b.id          = 'ptype-' + id;
+  b.textContent = sp.label;
+  b.style.color       = sp.color;
+  b.style.borderColor = sp.color + '55';
+  b.onclick = () => {
+    addMode = id;
+    document.querySelectorAll('.ptype-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+  };
+  ptypeRow.appendChild(b);
+}
+
+canvas.addEventListener('click', e => {
+  const rc = canvas.getBoundingClientRect();
+  const x = e.clientX - rc.left, y = e.clientY - rc.top;
+  const { vx, vy } = thermalV(addMode);
+  particles.push(new Particle(x, y, vx, vy, addMode));
+});
+
+function setGeo(g) {
+  geometry = g;
+  document.getElementById('btn-torus').classList.toggle('active', g === 'torus');
+  document.getElementById('btn-box').classList.toggle('active',   g === 'box');
+}
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById('btn-pause').textContent = paused ? '▶ Resume' : '⏸ Pause';
+}
+
+// Slider helper
+function wire(id, valId, fmt, cb) {
+  const sl = document.getElementById(id), vl = document.getElementById(valId);
+  sl.addEventListener('input', e => { const v = parseFloat(e.target.value); vl.textContent = fmt(v); cb(v); });
+}
+
+// Temperature: rescale existing particle velocities so avg KE matches new T
+function applyTemperature(newT) {
+  if (particles.length > 0) {
+    let ke = 0;
+    for (const p of particles) ke += 0.5 * p.mass * (p.vx*p.vx + p.vy*p.vy);
+    const currentT = ke / particles.length;
+    if (currentT > 1e-8) {
+      const scale = Math.sqrt(newT / currentT);
+      for (const p of particles) { p.vx *= scale; p.vy *= scale; }
+    }
+  }
+  temperature = newT;
+}
+
+wire('sl-temp',   'v-temp',   v => `T = ${v.toFixed(1)}`,                  applyTemperature);
+wire('sl-b',      'v-b',      v => `B = ${v.toFixed(2)}`,                  v => B = v);
+wire('sl-k',      'v-k',      v => `k = ${v.toFixed(1)}`,                  v => k = v);
+wire('sl-damp',   'v-damp',   v => v.toFixed(3),                            v => damping = v);
+wire('sl-inject', 'v-inject', v => v <= 0 ? 'Off' : v.toFixed(1),          v => injectEvery  = rateToEvery(v));
+wire('sl-exhaust','v-exhaust',v => v <= 0 ? 'Off' : v.toFixed(1),          v => exhaustEvery = rateToEvery(v));
+
+// Sync slider display to JS value
+function syncSlider(id, valId, fmt, val) {
+  document.getElementById(id).value = val;
+  document.getElementById(valId).textContent = fmt(val);
+}
+
+// ─── Presets ──────────────────────────────────────────────
+function loadPreset(name) {
+  clearAll();
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
+
+  // Mark live-injection presets
+  activePreset = ['neutral', 'dt', 'hot'].includes(name) ? name : null;
+
+  if (name === 'dt') {
+    // Set high T for fusion to occur
+    temperature = 5;
+    syncSlider('sl-temp', 'v-temp', v => `T = ${v.toFixed(1)}`, temperature);
+  }
+
+  if (name === 'neutral') {
+    for (let i = 0; i < 40; i++) {
+      const x = cx + (Math.random()-.5)*W*.7, y = cy + (Math.random()-.5)*H*.7;
+      particles.push(mkParticle(x, y, 'H'));
+      particles.push(mkParticle(x + gauss()*10, y + gauss()*10, 'e'));
+    }
+
+  } else if (name === 'dt') {
+    // Equal D-T mix + enough electrons to quasi-neutralize
+    for (let i = 0; i < 22; i++) {
+      const x = cx + (Math.random()-.5)*W*.65, y = cy + (Math.random()-.5)*H*.65;
+      particles.push(mkParticle(x, y, 'D'));
+      particles.push(mkParticle(x+(Math.random()-.5)*25, y+(Math.random()-.5)*25, 'T'));
+      particles.push(mkParticle(cx+(Math.random()-.5)*W*.65, cy+(Math.random()-.5)*H*.65, 'e'));
+      particles.push(mkParticle(cx+(Math.random()-.5)*W*.65, cy+(Math.random()-.5)*H*.65, 'e'));
+    }
+
+  } else if (name === 'beam') {
+    for (let i = 0; i < 28; i++) {
+      const y = cy + (Math.random()-.5)*H*.55;
+      const bspd = 4.5;
+      const { vx: ivx, vy: ivy } = thermalV('H');
+      particles.push(new Particle(70, y, bspd + ivx*.1, ivy*.3, 'H'));
+      const { vx: evx, vy: evy } = thermalV('e');
+      particles.push(new Particle(70, y + gauss()*8, bspd*4 + evx*.1, evy, 'e'));
+    }
+
+  } else if (name === 'vortex') {
+    const ionTypes = ['H', 'D', 'T', 'He'];
+    const nRings = [16, 12, 8];
+    const radii  = [0.30, 0.18, 0.09];
+    for (let ri = 0; ri < nRings.length; ri++) {
+      const n = nRings[ri], rad = Math.min(W, H) * radii[ri];
+      for (let i = 0; i < n; i++) {
+        const a = (2*Math.PI*i)/n;
+        const x = cx + rad*Math.cos(a), y = cy + rad*Math.sin(a);
+        const spd = 1.8 + ri * 0.4;
+        const vx0 = -spd*Math.sin(a), vy0 = spd*Math.cos(a);
+        const type = i % 4 === 0 ? 'e' : ionTypes[(i + ri) % ionTypes.length];
+        const { vx: tvx, vy: tvy } = thermalV(type);
+        particles.push(new Particle(x, y, vx0 + tvx*.2, vy0 + tvy*.2, type));
+      }
+    }
+
+  } else if (name === 'twostream') {
+    for (let i = 0; i < 38; i++) {
+      const x = Math.random() * W;
+      const bv = 3.2;
+      const { vx: v1x, vy: v1y } = thermalV('e');
+      const { vx: v2x, vy: v2y } = thermalV('e');
+      particles.push(new Particle(x, cy - 70 + gauss()*35,  bv + v1x*.3, v1y*.3, 'e'));
+      particles.push(new Particle(x, cy + 70 + gauss()*35, -bv + v2x*.3, v2y*.3, 'e'));
+    }
+    for (let i = 0; i < 28; i++) {
+      particles.push(mkParticle(Math.random()*W, Math.random()*H, 'H'));
+    }
+
+  } else if (name === 'hot') {
+    const pool = ['H','H','D','D','T','He','e','e','e','e'];
+    for (let i = 0; i < 70; i++) {
+      const type = pool[Math.floor(Math.random()*pool.length)];
+      const { vx, vy } = thermalV(type);
+      particles.push(new Particle(Math.random()*W, Math.random()*H, vx*1.8, vy*1.8, type));
+    }
+  }
+
+  saveInitial();
+}
+
+// ─── Particle injection (live presets) ───────────────────
+function injectParticles() {
+  const W = canvas.width, H = canvas.height;
+
+  if (activePreset === 'neutral') {
+    const n = 1 + Math.floor(Math.random() * 2); // 1-2 pairs
+    for (let i = 0; i < n; i++) {
+      const x = Math.random() * W, y = Math.random() * H;
+      particles.push(mkParticle(x, y, 'H'));
+      particles.push(mkParticle(x + gauss()*15, y + gauss()*15, 'e'));
+    }
+
+  } else if (activePreset === 'dt') {
+    for (let i = 0; i < 2; i++) {
+      const x = Math.random() * W, y = Math.random() * H;
+      particles.push(mkParticle(x, y, 'D'));
+      particles.push(mkParticle(x + gauss()*20, y + gauss()*20, 'T'));
+      particles.push(mkParticle(Math.random()*W, Math.random()*H, 'e'));
+      particles.push(mkParticle(Math.random()*W, Math.random()*H, 'e'));
+    }
+
+  } else if (activePreset === 'hot') {
+    const pool = ['H','H','D','D','T','He','e','e','e','e'];
+    const n = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      const type = pool[Math.floor(Math.random() * pool.length)];
+      const { vx, vy } = thermalV(type);
+      particles.push(new Particle(Math.random()*W, Math.random()*H, vx*1.8, vy*1.8, type));
+    }
+  }
+}
+
+// ─── Physics ──────────────────────────────────────────────
+function step() {
+  const W = canvas.width, H = canvas.height;
+  const n = particles.length;
+  if (n === 0) return;
+
+  const fx = new Float64Array(n);
+  const fy = new Float64Array(n);
+
+  // Pairwise Coulomb: F_on_i = k*qi*qj/r³ * (ri − rj)
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = i + 1; j < n; j++) {
+      let dx = particles[j].x - particles[i].x;
+      let dy = particles[j].y - particles[i].y;
+      if (geometry === 'torus') { dx = minImg(dx, W); dy = minImg(dy, H); }
+      const r2 = dx*dx + dy*dy + SOFT*SOFT;
+      const r  = Math.sqrt(r2);
+      const f  = k * particles[i].charge * particles[j].charge / (r2 * r);
+      fx[i] -= f * dx;  fy[i] -= f * dy;
+      fx[j] += f * dx;  fy[j] += f * dy;
+    }
+  }
+
+  // Integrate
+  for (let i = 0; i < n; i++) {
+    const p = particles[i];
+    // Lorentz: F = q(v × B), B along z → Fx=qvyB, Fy=−qvxB
+    const fmx = p.charge * p.vy * B;
+    const fmy = -p.charge * p.vx * B;
+    const ax  = (fx[i] + fmx) / p.mass;
+    const ay  = (fy[i] + fmy) / p.mass;
+
+    p.vx = (p.vx + ax * DT) * damping;
+    p.vy = (p.vy + ay * DT) * damping;
+
+    // Speed cap
+    const spd2 = p.vx*p.vx + p.vy*p.vy;
+    if (spd2 > MAX_SPD*MAX_SPD) {
+      const s = MAX_SPD / Math.sqrt(spd2);
+      p.vx *= s; p.vy *= s;
+    }
+
+    // Trail (before position update so it lags nicely)
+    p.trail.push({ x: p.x, y: p.y });
+    if (p.trail.length > TRAIL_MAX) p.trail.shift();
+
+    p.x += p.vx * DT;
+    p.y += p.vy * DT;
+
+    if (geometry === 'torus') {
+      if (p.x < 0) p.x += W;  if (p.x > W) p.x -= W;
+      if (p.y < 0) p.y += H;  if (p.y > H) p.y -= H;
+    } else {
+      // Elastic reflection
+      if (p.x < 0)  { p.x = -p.x;      p.vx =  Math.abs(p.vx); }
+      if (p.x > W)  { p.x = 2*W - p.x; p.vx = -Math.abs(p.vx); }
+      if (p.y < 0)  { p.y = -p.y;      p.vy =  Math.abs(p.vy); }
+      if (p.y > H)  { p.y = 2*H - p.y; p.vy = -Math.abs(p.vy); }
+    }
+  }
+
+  checkFusion();
+
+  frameCount++;
+
+  // Injection (live presets only, up to cap)
+  if (injectEvery > 0 && activePreset && particles.length < INJECT_CAP && frameCount % injectEvery === 0) {
+    injectParticles();
+  }
+
+  // Exhaust (always, when enabled)
+  if (exhaustEvery > 0 && particles.length > 0 && frameCount % exhaustEvery === 0) {
+    particles.splice(Math.floor(Math.random() * particles.length), 1);
+  }
+
+  // Decay flashes
+  for (const f of flashes) { f.r += 2.8; f.alpha -= 0.022; }
+  flashes = flashes.filter(f => f.alpha > 0);
+}
+
+function checkFusion() {
+  const W = canvas.width, H = canvas.height;
+  const remove = new Set();
+  const add    = [];
+
+  for (let i = 0; i < particles.length - 1; i++) {
+    if (remove.has(i)) continue;
+    const pi = particles[i];
+    if (pi.charge <= 0) continue;
+
+    for (let j = i + 1; j < particles.length; j++) {
+      if (remove.has(j)) continue;
+      const pj = particles[j];
+      if (pj.charge <= 0) continue;
+
+      const key = [pi.type, pj.type].sort().join('+');
+      const rxn = REACTIONS[key];
+      if (!rxn) continue;
+
+      let dx = pi.x - pj.x, dy = pi.y - pj.y;
+      if (geometry === 'torus') { dx = minImg(dx, W); dy = minImg(dy, H); }
+      if (dx*dx + dy*dy > FUSION_R*FUSION_R) continue;
+      if (Math.random() > FUSION_PROB)        continue;
+
+      // Conserve center-of-mass momentum, add kick
+      const M   = pi.mass + pj.mass;
+      const cmx = (pi.mass*pi.vx + pj.mass*pj.vx) / M;
+      const cmy = (pi.mass*pi.vy + pj.mass*pj.vy) / M;
+      const ang = Math.random() * 2 * Math.PI;
+
+      const prod = new Particle(
+        (pi.x + pj.x) / 2, (pi.y + pj.y) / 2,
+        cmx + rxn.kick * Math.cos(ang),
+        cmy + rxn.kick * Math.sin(ang),
+        rxn.product
+      );
+
+      add.push(prod);
+      remove.add(i);
+      remove.add(j);
+
+      flashes.push({
+        x: prod.x, y: prod.y,
+        r: 0, maxR: 80,
+        alpha: 1.0,
+        name: rxn.name
+      });
+      fusionCount++;
+      break;
+    }
+  }
+
+  // Remove in reverse index order
+  [...remove].sort((a, b) => b - a).forEach(i => particles.splice(i, 1));
+  particles.push(...add);
+}
+
+// ─── Rendering ────────────────────────────────────────────
+function glowColor(sp, alpha) {
+  const [r, g, b] = sp.glow;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function drawParticle(p, alpha = 1, scale = 1) {
+  const sp = SPECIES[p.type];
+  const px = p.x, py = p.y, pr = sp.r * scale;
+
+  // Glow halo
+  const grd = ctx.createRadialGradient(px, py, 0, px, py, pr * 4);
+  grd.addColorStop(0, glowColor(sp, 0.38 * alpha));
+  grd.addColorStop(1, glowColor(sp, 0));
+  ctx.beginPath(); ctx.arc(px, py, pr * 4, 0, Math.PI*2);
+  ctx.fillStyle = grd; ctx.fill();
+
+  // Core
+  ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI*2);
+  ctx.fillStyle = alpha < 1
+    ? SPECIES[p.type].color + Math.round(alpha * 255).toString(16).padStart(2,'0')
+    : SPECIES[p.type].color;
+  ctx.fill();
+}
+
+function drawTrail(p) {
+  const W = canvas.width, H = canvas.height;
+  if (p.trail.length < 2) return;
+  const sp = SPECIES[p.type];
+  ctx.beginPath();
+  let started = false;
+  for (let i = 0; i < p.trail.length; i++) {
+    const pt = p.trail[i];
+    if (i > 0) {
+      const prev = p.trail[i-1];
+      if (Math.abs(pt.x - prev.x) > W*.4 || Math.abs(pt.y - prev.y) > H*.4) {
+        started = false;
+      }
+    }
+    if (!started) { ctx.moveTo(pt.x, pt.y); started = true; }
+    else           { ctx.lineTo(pt.x, pt.y); }
+  }
+  ctx.strokeStyle = glowColor(sp, 0.18);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function drawGhosts(p) {
+  const W = canvas.width, H = canvas.height;
+  const offsets = [];
+  if (p.x < GHOST_DIST)        offsets.push([ W,  0]);
+  if (p.x > W - GHOST_DIST)    offsets.push([-W,  0]);
+  if (p.y < GHOST_DIST)        offsets.push([ 0,  H]);
+  if (p.y > H - GHOST_DIST)    offsets.push([ 0, -H]);
+  if (p.x < GHOST_DIST  && p.y < GHOST_DIST)       offsets.push([ W,  H]);
+  if (p.x > W-GHOST_DIST && p.y < GHOST_DIST)      offsets.push([-W,  H]);
+  if (p.x < GHOST_DIST  && p.y > H-GHOST_DIST)     offsets.push([ W, -H]);
+  if (p.x > W-GHOST_DIST && p.y > H-GHOST_DIST)    offsets.push([-W, -H]);
+
+  for (const [ox, oy] of offsets) {
+    const ghost = { x: p.x + ox, y: p.y + oy, type: p.type, trail: [] };
+    drawParticle(ghost, 0.28, 0.8);
+  }
+}
+
+function draw() {
+  const W = canvas.width, H = canvas.height;
+
+  // Motion-blur fade
+  ctx.fillStyle = 'rgba(8,8,24,0.30)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Box boundary
+  if (geometry === 'box') {
+    ctx.strokeStyle = '#2a2a5a';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(1, 1, W-2, H-2);
+  }
+
+  // Torus ghosts (wrap-around visual)
+  if (geometry === 'torus') {
+    for (const p of particles) drawGhosts(p);
+    // Subtle edge vignette to hint at wrap
+    const edgeA = 'rgba(100,120,255,0.06)';
+    const edgeB = 'rgba(100,120,255,0)';
+    for (const [x0,y0,x1,y1] of [[0,0,40,0],[W-40,0,W,0],[0,0,0,40],[0,H-40,0,H]]) {
+      const gx = ctx.createLinearGradient(x0,y0,x1,y1);
+      gx.addColorStop(0, edgeA); gx.addColorStop(1, edgeB);
+      ctx.fillStyle = gx; ctx.fillRect(Math.min(x0,x1), Math.min(y0,y1), Math.abs(x1-x0)||W, Math.abs(y1-y0)||H);
+    }
+  }
+
+  // Trails
+  for (const p of particles) drawTrail(p);
+
+  // Particles
+  for (const p of particles) drawParticle(p);
+
+  // Fusion flashes
+  for (const f of flashes) {
+    if (f.r <= 0) continue;
+    const grd = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r);
+    grd.addColorStop(0,   `rgba(255,255,220,${f.alpha * 0.95})`);
+    grd.addColorStop(0.25,`rgba(255,220, 60,${f.alpha * 0.6})`);
+    grd.addColorStop(0.6, `rgba(255, 80,  0,${f.alpha * 0.3})`);
+    grd.addColorStop(1,   `rgba(255, 40,  0,0)`);
+    ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI*2);
+    ctx.fillStyle = grd; ctx.fill();
+
+    // Label
+    if (f.alpha > 0.6) {
+      ctx.fillStyle = `rgba(255,240,150,${(f.alpha - 0.6) * 2.5})`;
+      ctx.font = 'bold 11px Segoe UI, system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(f.name, f.x, f.y - f.r * 0.5 - 4);
+    }
+  }
+
+  // ── Stats ─────────────────────────────────────────────
+  const counts = {};
+  for (const id of Object.keys(SPECIES)) counts[id] = 0;
+  let ke = 0;
+  for (const p of particles) {
+    counts[p.type]++;
+    ke += 0.5 * p.mass * (p.vx*p.vx + p.vy*p.vy);
+  }
+  const avgKE = particles.length ? ke / particles.length : 0;
+
+  let html = '';
+  for (const [id, sp] of Object.entries(SPECIES)) {
+    if (counts[id] === 0) continue;
+    html += `<div class="srow"><span style="color:${sp.color}99">${sp.label}</span><span style="color:${sp.color}">${counts[id]}</span></div>`;
+  }
+  html += `<div class="srow"><span style="color:#6677aa">Avg KE</span><span class="sv">${avgKE.toFixed(2)}</span></div>`;
+  html += `<div class="srow"><span style="color:#ffee44aa">⚡ Fusions</span><span style="color:#ffee88">${fusionCount}</span></div>`;
+  document.getElementById('stats').innerHTML = html;
+}
+
+// ─── Loop ─────────────────────────────────────────────────
+function loop() {
+  if (!paused) step();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ─── Boot ─────────────────────────────────────────────────
+loadPreset('neutral');
+loop();
+</script>
+</body>
+</html>
