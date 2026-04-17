@@ -453,35 +453,23 @@ function loadPreset(name) {
 }
 
 // ─── Particle injection (live presets) ───────────────────
+// Always injects exactly 1 ion + 1 electron (charge-neutral pair).
 function injectParticles() {
   const W = canvas.width, H = canvas.height;
+  const x = Math.random() * W, y = Math.random() * H;
 
+  let ionType;
   if (activePreset === 'neutral') {
-    const n = 1 + Math.floor(Math.random() * 2); // 1-2 pairs
-    for (let i = 0; i < n; i++) {
-      const x = Math.random() * W, y = Math.random() * H;
-      particles.push(mkParticle(x, y, 'H'));
-      particles.push(mkParticle(x + gauss()*15, y + gauss()*15, 'e'));
-    }
-
+    ionType = 'H';
   } else if (activePreset === 'dt') {
-    for (let i = 0; i < 2; i++) {
-      const x = Math.random() * W, y = Math.random() * H;
-      particles.push(mkParticle(x, y, 'D'));
-      particles.push(mkParticle(x + gauss()*20, y + gauss()*20, 'T'));
-      particles.push(mkParticle(Math.random()*W, Math.random()*H, 'e'));
-      particles.push(mkParticle(Math.random()*W, Math.random()*H, 'e'));
-    }
-
+    ionType = Math.random() < 0.5 ? 'D' : 'T';
   } else if (activePreset === 'hot') {
-    const pool = ['H','H','D','D','T','He','e','e','e','e'];
-    const n = 2 + Math.floor(Math.random() * 3);
-    for (let i = 0; i < n; i++) {
-      const type = pool[Math.floor(Math.random() * pool.length)];
-      const { vx, vy } = thermalV(type);
-      particles.push(new Particle(Math.random()*W, Math.random()*H, vx*1.8, vy*1.8, type));
-    }
+    const ionPool = ['H', 'D', 'T', 'He'];
+    ionType = ionPool[Math.floor(Math.random() * ionPool.length)];
   }
+
+  particles.push(mkParticle(x, y, ionType));
+  particles.push(mkParticle(x + gauss()*15, y + gauss()*15, 'e'));
 }
 
 // ─── Physics ──────────────────────────────────────────────
@@ -554,9 +542,22 @@ function step() {
     injectParticles();
   }
 
-  // Exhaust (always, when enabled)
-  if (exhaustEvery > 0 && particles.length > 0 && frameCount % exhaustEvery === 0) {
-    particles.splice(Math.floor(Math.random() * particles.length), 1);
+  // Exhaust (always, when enabled) — removes 1 ion + 1 electron (charge-neutral).
+  // Preferentially removes ⁴He ions; falls back to a random ion.
+  if (exhaustEvery > 0 && frameCount % exhaustEvery === 0) {
+    const heIdx   = particles.reduce((acc, p, i) => { if (p.type === 'He') acc.push(i); return acc; }, []);
+    const ionIdx  = particles.reduce((acc, p, i) => { if (p.charge > 0)   acc.push(i); return acc; }, []);
+    const elecIdx = particles.reduce((acc, p, i) => { if (p.charge < 0)   acc.push(i); return acc; }, []);
+    if (ionIdx.length > 0 && elecIdx.length > 0) {
+      const rmIon  = heIdx.length > 0
+        ? heIdx[Math.floor(Math.random() * heIdx.length)]
+        : ionIdx[Math.floor(Math.random() * ionIdx.length)];
+      const rmElec = elecIdx[Math.floor(Math.random() * elecIdx.length)];
+      // Remove higher index first so the lower index stays valid
+      const [hi, lo] = rmIon > rmElec ? [rmIon, rmElec] : [rmElec, rmIon];
+      particles.splice(hi, 1);
+      particles.splice(lo, 1);
+    }
   }
 
   // Decay flashes
