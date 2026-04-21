@@ -74,11 +74,22 @@ export const INITIAL_PLANET = {
     { id:'t0', nodeId:'n0', type:'launch', level:1, owner:'player' }
   ],
   mechs: [],
+  launchPadHull: 100,
+  wave: 1,
+  nextWaveFrame: 900,
   bots: [
-    { id:'bot0', owner:'npc', nodeId:'n4', target:'n2', path:['n4','n3','n2'], progress:0, speed:0.008, hull:40, color:'#ff6644' },
-    { id:'bot1', owner:'npc', nodeId:'n8', target:'n6', path:['n8','n7','n6'], progress:0, speed:0.006, hull:30, color:'#ffaa22' },
+    { id:'bot0', owner:'npc', nodeId:'n4', path:[], progress:0, speed:0.008, hull:40, color:'#ff6644' },
+    { id:'bot1', owner:'npc', nodeId:'n8', path:[], progress:0, speed:0.006, hull:30, color:'#ffaa22' },
+    { id:'bot2', owner:'npc', nodeId:'n9', path:[], progress:0, speed:0.007, hull:35, color:'#ff4488' },
   ],
   players: {}
+};
+
+// ── Weapons ───────────────────────────────────────────────────────────────
+export const WEAPONS = {
+  laser:   { label:'Laser',   damage:10, cooldown:7,  speed:20, range:340, color:'#44ffff', size:2   },
+  cannon:  { label:'Cannon',  damage:32, cooldown:22, speed:13, range:420, color:'#ffee44', size:3.5 },
+  missile: { label:'Missile', damage:65, cooldown:48, speed:7,  range:520, color:'#ff8844', size:4   },
 };
 
 // ── EventBus ──────────────────────────────────────────────────────────────
@@ -155,6 +166,7 @@ export const GameState = {
   fleetSelected: [],      // ship ids in fleet selection
 
   selectedEntity: null,   // clicked entity for inspector
+  selectedWeapon: 'laser', // active weapon type
   jumpQueue: [],          // ordered list of system ids to jump through
   get jumpTarget() { return this.jumpQueue.length ? this.jumpQueue[0] : null; },
   set jumpTarget(val) { this.jumpQueue = val ? [val] : []; },

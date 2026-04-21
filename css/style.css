@@ -170,6 +170,22 @@ body {
 }
 .tower-btn:hover { background: #1c1c40; color: var(--text); }
 
+/* ── Weapon picker ── */
+#weapon-picker { padding: 4px 6px 0; }
+.weapon-btn {
+  flex: 1 0 calc(33% - 2px);
+  padding: 5px 4px;
+  border: 1px solid #223344;
+  background: #080818;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  text-align: center;
+  line-height: 1.4;
+  transition: background 0.15s;
+}
+.weapon-btn:hover { background: #111830; }
+
 /* ── Buttons ── */
 .btn {
   padding: 5px 8px;

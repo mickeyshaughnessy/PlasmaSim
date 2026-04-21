@@ -175,6 +175,20 @@ function handleJumpKey() {
 
 function handleLandKey() {
   const gs = GameState;
+  if (gs.mode === 'planet') {
+    // Launch from planet if at a launch pad node
+    const mech = gs.playerMech;
+    const pl = gs.planet;
+    if (!mech || !pl) return;
+    const launchTower = pl.towers.find(t => t.type === 'launch' && t.nodeId === mech.nodeId);
+    if (launchTower || mech.nodeId === pl.graph.nodes[0]?.id) {
+      gs.launchFromPlanet();
+      toast('Launching from planet surface');
+    } else {
+      toast('Move to the Launch Pad (cyan node) to leave the planet');
+    }
+    return;
+  }
   if (gs.mode !== 'space') return;
   if (gs.jumpAnim?.active) return;
   const sys = gs.system;

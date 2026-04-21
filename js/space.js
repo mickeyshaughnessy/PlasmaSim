@@ -1,6 +1,6 @@
 // Space mode: N-body physics, ship thrust, weapons, boarding, jump animation
 "use strict";
-import { GameState, bus } from './state.js';
+import { GameState, bus, WEAPONS } from './state.js';
 
 const THRUST        = 0.018;
 const FUEL_BURN     = 0.012;
@@ -15,10 +15,7 @@ const SOFT          = 80;
 const TRAIL_MAX     = 28;
 const STAR_COUNT    = 180;
 const G             = 420;
-const WEAPON_COOLDOWN  = 10;   // frames between shots
-const PROJECTILE_SPEED = 14;
-const PROJECTILE_LIFE  = 55;   // frames
-const WEAPON_DAMAGE    = 18;
+const PROJECTILE_LIFE  = 58;   // frames
 const WARP_FRAMES      = 100;  // frames for jump animation
 
 // ── Star field ────────────────────────────────────────────────────────────
@@ -179,13 +176,32 @@ export const SpaceMode = {
       if (op.system === gs.currentSystemId && op.pos) addTrail(`op_${op.id}`, op.pos.x, op.pos.y);
     }
 
-    // ── Weapon firing (Space held or locked) ─────────────────────────────
+    // ── Weapon firing ─────────────────────────────────────────────────────
     if (this.weaponCooldown > 0) this.weaponCooldown -= dt;
-    if (keys.has(' ') && this.weaponCooldown <= 0) {
-      const target = resolveWeaponTarget(gs, ps);
-      if (target) {
-        fireProjectile(ps, target);
-        this.weaponCooldown = WEAPON_COOLDOWN;
+    if (this.weaponCooldown <= 0) {
+      const weapon = WEAPONS[gs.selectedWeapon] || WEAPONS.laser;
+      // Auto-fire at actively hostile ships (no key needed)
+      let autoTarget = null;
+      if (gs.weaponTarget) {
+        autoTarget = sys.ships.find(s => s.id === gs.weaponTarget) || null;
+        if (!autoTarget) gs.weaponTarget = null;
+      }
+      if (!autoTarget) {
+        // Find nearest hostile ship in weapon range
+        let nearDist = weapon.range;
+        for (const ship of sys.ships) {
+          const state = ship.npc?.state;
+          if (state !== 'attack' && state !== 'chase') continue;
+          const d = Math.hypot(ship.x - ps.x, ship.y - ps.y);
+          if (d < nearDist) { autoTarget = ship; nearDist = d; }
+        }
+      }
+      // Also fire on Space key at any resolved target (locked or mouse-nearest)
+      const spaceTarget = keys.has(' ') ? resolveWeaponTarget(gs, ps) : null;
+      const fireTarget = autoTarget || spaceTarget;
+      if (fireTarget) {
+        fireProjectile(ps, fireTarget, weapon);
+        this.weaponCooldown = weapon.cooldown;
         bus.emit('weapon:fire');
       }
     }
@@ -202,7 +218,7 @@ export const SpaceMode = {
       let hit = false;
       for (const ship of sys.ships) {
         if (Math.hypot(ship.x - proj.x, ship.y - proj.y) < 14) {
-          ship.hull = Math.max(0, ship.hull - WEAPON_DAMAGE);
+          ship.hull = Math.max(0, ship.hull - (proj.damage || 18));
           spawnHitParticles(proj.x, proj.y);
           hit = true;
           if (ship.hull <= 0) {
@@ -343,9 +359,12 @@ export const SpaceMode = {
 
     // Projectiles
     for (const proj of projectiles) {
-      glowRgb(ctx, proj.x, proj.y, 8, [255,200,60], proj.life/PROJECTILE_LIFE * 0.9);
-      ctx.beginPath(); ctx.arc(proj.x, proj.y, 2.5, 0, Math.PI*2);
-      ctx.fillStyle = '#ffee44'; ctx.fill();
+      const color = proj.color || '#ffee44';
+      const rgb = color === '#44ffff' ? [68,255,255] : color === '#ff8844' ? [255,136,68] : [255,238,68];
+      const sz = proj.size || 2.5;
+      glowRgb(ctx, proj.x, proj.y, sz*4, rgb, proj.life/PROJECTILE_LIFE * 0.8);
+      ctx.beginPath(); ctx.arc(proj.x, proj.y, sz, 0, Math.PI*2);
+      ctx.fillStyle = color; ctx.fill();
     }
 
     // Hit/explosion particles
@@ -422,12 +441,14 @@ function resolveWeaponTarget(gs, ps) {
   return nearest;
 }
 
-function fireProjectile(ps, target) {
+function fireProjectile(ps, target, weapon) {
+  weapon = weapon || WEAPONS.laser;
   const dx = target.x - ps.x, dy = target.y - ps.y;
   const dist = Math.hypot(dx, dy) || 1;
-  const vx = (dx/dist) * PROJECTILE_SPEED + ps.vx * 0.3;
-  const vy = (dy/dist) * PROJECTILE_SPEED + ps.vy * 0.3;
-  projectiles.push({ x: ps.x, y: ps.y, vx, vy, life: PROJECTILE_LIFE });
+  const vx = (dx/dist) * weapon.speed + ps.vx * 0.3;
+  const vy = (dy/dist) * weapon.speed + ps.vy * 0.3;
+  projectiles.push({ x: ps.x, y: ps.y, vx, vy, life: PROJECTILE_LIFE,
+    damage: weapon.damage, color: weapon.color, size: weapon.size });
 }
 
 // ── Hit/explosion particles ───────────────────────────────────────────────

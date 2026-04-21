@@ -1,6 +1,6 @@
 // Right panel UI manager
 "use strict";
-import { GameState, bus } from './state.js';
+import { GameState, bus, WEAPONS } from './state.js';
 import { TOWER_TYPES, PlanetMode } from './planet.js';
 import { JUMP_SPEED } from './space.js';
 import { Audio } from './audio.js';
@@ -28,6 +28,7 @@ export const UI = {
     bus.on('system:jumped', () => this.update());
 
     this.buildActionButtons();
+    this.buildWeaponPicker();
     this.update();
   },
 
@@ -101,12 +102,16 @@ export const UI = {
       const nodeId = mech?.nodeId;
       const nodeName = nodeId ? pl.graph.nodes.find(n=>n.id===nodeId)?.label || nodeId : '—';
       const towers = pl.towers.filter(t => t.owner === gs.playerId).length;
+      const lh = pl.launchPadHull ?? 100;
+      const lhColor = lh > 50 ? '#44ffaa' : lh > 25 ? '#ffcc44' : '#ff4444';
       el.innerHTML = `
+        <div class="stat-row"><span class="stat-label">LAUNCH PAD</span><span class="stat-val" style="color:${lhColor}">${lh.toFixed(0)}%</span></div>
+        <div class="bar-wrap bar-hull"><div class="bar-fill" style="width:${lh}%;background:${lhColor}"></div></div>
         <div class="stat-row"><span class="stat-label">NODE</span><span class="stat-val">${nodeName}</span></div>
         <div class="stat-row"><span class="stat-label">CREDITS</span><span class="stat-val" style="color:#ffee44">${credits}</span></div>
         <div class="stat-row"><span class="stat-label">TOWERS</span><span class="stat-val">${towers}</span></div>
-        <div class="stat-row"><span class="stat-label">BOTS (enemy)</span><span class="stat-val" style="color:#ff4444">${pl.bots.filter(b=>b.owner==='npc').length}</span></div>
-        <div class="stat-row"><span class="stat-label">BIOME</span><span class="stat-val">${pl.biome}</span></div>
+        <div class="stat-row"><span class="stat-label">WAVE</span><span class="stat-val" style="color:#ff8844">${pl.wave||1}</span></div>
+        <div class="stat-row"><span class="stat-label">ENEMIES</span><span class="stat-val" style="color:#ff4444">${pl.bots.length}</span></div>
       `;
     } else if (gs.mode === 'galaxy') {
       const gSys = gs.galaxy?.systems[gs.currentSystemId];
@@ -270,6 +275,32 @@ export const UI = {
     }
   },
 
+  buildWeaponPicker() {
+    const el = document.getElementById('weapon-picker');
+    if (!el) return;
+    let html = '<div class="section-title">WEAPON</div><div style="display:flex;gap:3px;flex-wrap:wrap">';
+    for (const [key, w] of Object.entries(WEAPONS)) {
+      html += `<button class="weapon-btn" id="wpn-${key}" onclick="window.__selectWeapon('${key}')"
+        style="border-color:${w.color}44;color:${w.color}">
+        ${w.label}<br><span style="color:#445566;font-size:9px">dmg ${w.damage} · cd ${w.cooldown}</span>
+      </button>`;
+    }
+    html += '</div>';
+    el.innerHTML = html;
+    this.refreshWeaponPicker();
+  },
+
+  refreshWeaponPicker() {
+    const sel = GameState.selectedWeapon;
+    for (const key of Object.keys(WEAPONS)) {
+      const btn = document.getElementById(`wpn-${key}`);
+      if (!btn) continue;
+      const w = WEAPONS[key];
+      btn.style.background = key === sel ? w.color + '22' : '';
+      btn.style.borderColor = key === sel ? w.color : w.color + '44';
+    }
+  },
+
   updateActions() {
     const gs = GameState;
     document.getElementById('space-actions').style.display  = gs.mode === 'space' ? '' : 'none';
@@ -279,6 +310,7 @@ export const UI = {
     if (cj) cj.style.display = gs.jumpTarget ? '' : 'none';
     const pp = document.getElementById('btn-pause');
     if (pp) pp.textContent = gs.paused ? '▶ Resume' : '⏸ Pause';
+    this.refreshWeaponPicker();
   }
 };
 
@@ -302,6 +334,10 @@ window.__openGalaxy = () => GameState.openGalaxy();
 window.__closeGalaxy = () => GameState.closeGalaxy();
 window.__clearJump = () => { GameState.jumpQueue = []; UI.update(); };
 window.__launchShip = () => GameState.launchFromPlanet();
+window.__selectWeapon = (type) => {
+  GameState.selectedWeapon = type;
+  UI.refreshWeaponPicker();
+};
 window.__buildTower = (type) => {
   const ok = PlanetMode.buildTower(type);
   if (!ok) { toast('Cannot build here (no node selected or already built)'); }
