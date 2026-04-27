@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fusion Racetrack Simulator</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0a0f; color: #e0e8ff; font-family: 'Courier New', monospace; font-size: 12px; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+#top-bar { background: #111122; border-bottom: 1px solid #334; padding: 6px 12px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+#top-bar h1 { font-size: 14px; color: #88aaff; white-space: nowrap; }
+.stat-box { background: #1a1a2e; border: 1px solid #334; border-radius: 3px; padding: 3px 8px; white-space: nowrap; }
+.stat-label { color: #778; font-size: 10px; }
+.stat-value { color: #aef; font-size: 13px; font-weight: bold; }
+.stat-value.hot { color: #f84; }
+.stat-value.power { color: #4f8; }
+.stat-value.warn { color: #fa4; }
+#main { display: flex; flex: 1; overflow: hidden; }
+#canvas-wrap { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #07070f; }
+canvas { border: 1px solid #334; }
+#controls { width: 280px; background: #0e0e1e; border-left: 1px solid #334; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.ctrl-section { background: #111128; border: 1px solid #334; border-radius: 4px; padding: 8px; }
+.ctrl-section h3 { font-size: 11px; color: #88aaff; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; border-bottom: 1px solid #223; padding-bottom: 3px; }
+.ctrl-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; gap: 4px; }
+.ctrl-row label { color: #aab; font-size: 10px; flex: 1; }
+.ctrl-row input[type=range] { flex: 1.5; height: 4px; accent-color: #66aaff; }
+.ctrl-row .val { color: #cde; font-size: 10px; width: 44px; text-align: right; }
+.ctrl-row input[type=checkbox] { accent-color: #66aaff; }
+.btn-row { display: flex; gap: 4px; flex-wrap: wrap; }
+button { background: #1e2244; border: 1px solid #445; color: #aac; font-size: 11px; font-family: inherit; padding: 3px 8px; border-radius: 3px; cursor: pointer; }
+button:hover { background: #2a3060; border-color: #66aaff; color: #fff; }
+button.active { background: #223388; border-color: #88aaff; color: #cce; }
+#log { background: #070710; border: 1px solid #223; border-radius: 3px; height: 90px; overflow-y: auto; padding: 4px; font-size: 10px; color: #667; }
+#log .entry { color: #99bb88; }
+#log .entry.warn { color: #cc8833; }
+#log .entry.react { color: #ffaa44; }
+#legend { display: flex; flex-wrap: wrap; gap: 6px; font-size: 10px; }
+.leg { display: flex; align-items: center; gap: 3px; }
+.leg-dot { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<div id="top-bar">
+  <h1>⚡ FUSION RACETRACK SIM</h1>
+  <div class="stat-box"><div class="stat-label">FUEL IN (mg/s)</div><div class="stat-value" id="s-fuel">0.00</div></div>
+  <div class="stat-box"><div class="stat-label">PLASMA TEMP (keV)</div><div class="stat-value hot" id="s-temp">0.0</div></div>
+  <div class="stat-box"><div class="stat-label">PINCH Bz (T)</div><div class="stat-value" id="s-bz">0.0</div></div>
+  <div class="stat-box"><div class="stat-label">REACTIONS/s</div><div class="stat-value warn" id="s-react">0</div></div>
+  <div class="stat-box"><div class="stat-label">NET POWER (kW)</div><div class="stat-value power" id="s-power">0.0</div></div>
+  <div class="stat-box"><div class="stat-label">EFFICIENCY (%)</div><div class="stat-value power" id="s-eff">0.0</div></div>
+  <div class="stat-box"><div class="stat-label">EXHAUST TEMP (K)</div><div class="stat-value" id="s-exhaust">0</div></div>
+  <div class="stat-box"><div class="stat-label">VOLTAGE (V)</div><div class="stat-value" id="s-volt">0</div></div>
+</div>
+
+<div id="main">
+<div id="canvas-wrap">
+  <canvas id="sim-canvas" width="700" height="460"></canvas>
+</div>
+<div id="controls">
+
+  <div class="ctrl-section">
+    <h3>Simulation</h3>
+    <div class="btn-row">
+      <button id="btn-run">▶ RUN</button>
+      <button id="btn-pause">⏸ PAUSE</button>
+      <button id="btn-reset">↺ RESET</button>
+      <button id="btn-step">STEP</button>
+    </div>
+    <div class="ctrl-row" style="margin-top:6px">
+      <label>Speed</label>
+      <input type="range" id="ctrl-speed" min="1" max="20" value="5" step="1">
+      <span class="val" id="v-speed">5x</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Particles</label>
+      <input type="range" id="ctrl-npart" min="20" max="300" value="80" step="10">
+      <span class="val" id="v-npart">80</span>
+    </div>
+  </div>
+
+  <div class="ctrl-section">
+    <h3>Fuel Blending</h3>
+    <div class="ctrl-row">
+      <label>D-T fraction</label>
+      <input type="range" id="ctrl-dt" min="0" max="1" value="0.5" step="0.05">
+      <span class="val" id="v-dt">50%</span>
+    </div>
+    <div class="ctrl-row">
+      <label>D-D fraction</label>
+      <input type="range" id="ctrl-dd" min="0" max="1" value="0.3" step="0.05">
+      <span class="val" id="v-dd">30%</span>
+    </div>
+    <div class="ctrl-row">
+      <label>p-B11 fraction</label>
+      <input type="range" id="ctrl-pb" min="0" max="1" value="0.2" step="0.05">
+      <span class="val" id="v-pb">20%</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Fuel flow rate</label>
+      <input type="range" id="ctrl-flow" min="0" max="1" value="0.4" step="0.05">
+      <span class="val" id="v-flow">0.4</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Injector temp (keV)</label>
+      <input type="range" id="ctrl-inj-temp" min="0.1" max="10" value="1" step="0.1">
+      <span class="val" id="v-inj-temp">1.0</span>
+    </div>
+  </div>
+
+  <div class="ctrl-section">
+    <h3>Electromagnetic Steering</h3>
+    <div class="ctrl-row">
+      <label>Guide Bz (T)</label>
+      <input type="range" id="ctrl-guide-b" min="0" max="5" value="1" step="0.1">
+      <span class="val" id="v-guide-b">1.0</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Steering Ex (kV/m)</label>
+      <input type="range" id="ctrl-ex" min="-5" max="5" value="0" step="0.1">
+      <span class="val" id="v-ex">0.0</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Steering Ey (kV/m)</label>
+      <input type="range" id="ctrl-ey" min="-5" max="5" value="0" step="0.1">
+      <span class="val" id="v-ey">0.0</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Ohmic heating (kW)</label>
+      <input type="range" id="ctrl-ohmic" min="0" max="100" value="10" step="1">
+      <span class="val" id="v-ohmic">10</span>
+    </div>
+    <div class="ctrl-row">
+      <label>RF heating (kW)</label>
+      <input type="range" id="ctrl-rf" min="0" max="200" value="20" step="5">
+      <span class="val" id="v-rf">20</span>
+    </div>
+  </div>
+
+  <div class="ctrl-section">
+    <h3>Pinch Dynamics</h3>
+    <div class="ctrl-row">
+      <label>Peak Bz (T)</label>
+      <input type="range" id="ctrl-pinch-b" min="1" max="50" value="15" step="1">
+      <span class="val" id="v-pinch-b">15</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Pulse freq (Hz)</label>
+      <input type="range" id="ctrl-pulse-f" min="0.1" max="100" value="10" step="0.1">
+      <span class="val" id="v-pulse-f">10</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Pulse duty cycle</label>
+      <input type="range" id="ctrl-duty" min="0.05" max="0.95" value="0.3" step="0.05">
+      <span class="val" id="v-duty">30%</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Pinch radius (mm)</label>
+      <input type="range" id="ctrl-pinch-r" min="0.1" max="3" value="0.8" step="0.1">
+      <span class="val" id="v-pinch-r">0.8</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Pinch length (mm)</label>
+      <input type="range" id="ctrl-pinch-l" min="1" max="10" value="4" step="0.5">
+      <span class="val" id="v-pinch-l">4.0</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Compression ratio</label>
+      <input type="range" id="ctrl-compression" min="2" max="20" value="8" step="1">
+      <span class="val" id="v-compression">8</span>
+    </div>
+  </div>
+
+  <div class="ctrl-section">
+    <h3>Electromagnet Array</h3>
+    <div id="magnet-array" style="display:grid;grid-template-columns:repeat(8,1fr);gap:3px;margin-bottom:6px"></div>
+    <div class="ctrl-row">
+      <label>Selected coil B (T)</label>
+      <input type="range" id="ctrl-coil-b" min="-5" max="5" value="1" step="0.1">
+      <span class="val" id="v-coil-b">1.0</span>
+    </div>
+    <div class="btn-row">
+      <button id="btn-coil-zero">Zero All</button>
+      <button id="btn-coil-guide">Set Guide</button>
+      <button id="btn-coil-focus">Focus</button>
+    </div>
+  </div>
+
+  <div class="ctrl-section">
+    <h3>Exhaust &amp; Turbine</h3>
+    <div class="ctrl-row">
+      <label>Turbine stages</label>
+      <input type="range" id="ctrl-turb-stages" min="1" max="6" value="3" step="1">
+      <span class="val" id="v-turb-stages">3</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Turbine eff (%)</label>
+      <input type="range" id="ctrl-turb-eff" min="20" max="65" value="45" step="1">
+      <span class="val" id="v-turb-eff">45%</span>
+    </div>
+    <div class="ctrl-row">
+      <label>Exhaust backpressure</label>
+      <input type="range" id="ctrl-backp" min="0" max="1" value="0.3" step="0.05">
+      <span class="val" id="v-backp">0.3</span>
+    </div>
+    <div class="ctrl-row">
+      <label>MHD generator</label>
+      <input type="checkbox" id="ctrl-mhd" checked>
+    </div>
+    <div class="ctrl-row">
+      <label>MHD coupling eff (%)</label>
+      <input type="range" id="ctrl-mhd-eff" min="5" max="40" value="20" step="1">
+      <span class="val" id="v-mhd-eff">20%</span>
+    </div>
+  </div>
+
+  <div class="ctrl-section">
+    <h3>Display</h3>
+    <div class="ctrl-row"><label>Show B-field</label><input type="checkbox" id="disp-bfield" checked></div>
+    <div class="ctrl-row"><label>Show E-field</label><input type="checkbox" id="disp-efield"></div>
+    <div class="ctrl-row"><label>Show particle trails</label><input type="checkbox" id="disp-trails" checked></div>
+    <div class="ctrl-row"><label>Color by energy</label><input type="checkbox" id="disp-energy" checked></div>
+    <div class="ctrl-row"><label>Show pinch zone</label><input type="checkbox" id="disp-pinch" checked></div>
+    <div id="legend">
+      <div class="leg"><div class="leg-dot" style="background:#ff6633"></div>Deuterium</div>
+      <div class="leg"><div class="leg-dot" style="background:#33aaff"></div>Tritium</div>
+      <div class="leg"><div class="leg-dot" style="background:#ffff44"></div>Proton</div>
+      <div class="leg"><div class="leg-dot" style="background:#ff88ff"></div>Boron-11</div>
+      <div class="leg"><div class="leg-dot" style="background:#88ff88"></div>He-4 (α)</div>
+      <div class="leg"><div class="leg-dot" style="background:#ffffff"></div>Neutron</div>
+      <div class="leg"><div class="leg-dot" style="background:#aaaaaa"></div>He-3</div>
+      <div class="leg"><div class="leg-dot" style="background:#ffaa00"></div>Electron</div>
+    </div>
+  </div>
+
+  <div class="ctrl-section">
+    <h3>Event Log</h3>
+    <div id="log"></div>
+  </div>
+
+</div><!-- /controls -->
+</div><!-- /main -->
+
+<script>
+"use strict";
+// ============================================================
+// CONSTANTS
+// ============================================================
+const C = { e:1.602e-19, k:1.381e-23 };
+const AMU = 1.6605e-27;
+
+// ── Species: mass(AMU), charge(e), color, glow[r,g,b], radius(px) ──
+const SPECIES = {
+  D:  { name:'²D',  mass:2.014,   charge:1,  color:'#ff6633', glow:[255,102,51],  r:4.5 },
+  T:  { name:'³T',  mass:3.016,   charge:1,  color:'#33aaff', glow:[51,170,255],  r:4.5 },
+  P:  { name:'¹H',  mass:1.008,   charge:1,  color:'#ffff44', glow:[255,255,68],  r:3.5 },
+  B11:{ name:'¹¹B', mass:11.009,  charge:5,  color:'#ff88ff', glow:[255,136,255], r:6   },
+  He4:{ name:'⁴He', mass:4.003,   charge:2,  color:'#88ff88', glow:[136,255,136], r:5   },
+  He3:{ name:'³He', mass:3.016,   charge:2,  color:'#cccccc', glow:[200,200,200], r:4.5 },
+  n:  { name:'n',   mass:1.009,   charge:0,  color:'#aaccff', glow:[170,200,255], r:3   },
+  e:  { name:'e⁻',  mass:5.49e-4, charge:-1, color:'#ffaa00', glow:[255,170,0],   r:2   },
+};
+
+// ── Reactions ──────────────────────────────────────────────────
+const REACTIONS = [
+  {
+    name:'D-T', label:'D+T→⁴He+n', r1:'D', r2:'T',
+    products:[{s:'He4',ek:3.52},{s:'n',ek:14.07}], Q:17.59, neutronic:true,
+    sigmav(T){ if(T<0.5)return 0;
+      const xi=Math.pow(34.38*34.38/(4*T),1/3);
+      return Math.min(6.3e-21*xi*xi*Math.exp(-3*xi)/(T*T), 3.68e-22)*Math.max(0,1-Math.exp(-(T-0.5)/5)); }
+  },
+  {
+    name:'D-D→He3', label:'D+D→³He+n', r1:'D', r2:'D',
+    products:[{s:'He3',ek:0.82},{s:'n',ek:2.45}], Q:3.27, neutronic:true,
+    sigmav(T){ return T<1?0: 2.3e-24*Math.pow(T/10,2.5)/(1+Math.pow(T/80,2)); }
+  },
+  {
+    name:'D-D→T+p', label:'D+D→T+p', r1:'D', r2:'D',
+    products:[{s:'T',ek:1.01},{s:'P',ek:3.02}], Q:4.03, neutronic:false,
+    sigmav(T){ return T<1?0: 2.3e-24*Math.pow(T/10,2.5)/(1+Math.pow(T/80,2)); }
+  },
+  {
+    name:'p-B11', label:'p+¹¹B→3⁴He', r1:'P', r2:'B11',
+    products:[{s:'He4',ek:2.9},{s:'He4',ek:2.9},{s:'He4',ek:2.9}], Q:8.7, neutronic:false,
+    sigmav(T){ return T<10?0: 1.5e-26*Math.pow(T/100,3)/(1+Math.pow(T/300,4)); }
+  },
+];
+
+// ── Geometry ───────────────────────────────────────────────────
+const SIM_W=0.020, SIM_H=0.030, MARGIN=32;
+const canvas=document.getElementById('sim-canvas');
+const ctx=canvas.getContext('2d');
+const CW=canvas.width, CH=canvas.height;
+const SX=(CW-2*MARGIN)/SIM_W, SY=(CH-2*MARGIN)/SIM_H;
+function sx(x){return MARGIN+x*SX;} function sy(y){return CH-MARGIN-y*SY;}
+
+const OX=SIM_W/2, OY=SIM_H/2, OA=SIM_H/2-0.004, OB=SIM_W/2-0.003;
+const TRACK_W=0.002;
+
+function ovalPt(theta){ return {x:OX+OB*Math.cos(theta), y:OY+OA*Math.sin(theta)}; }
+
+// Compute canvas pixel position of a particle given its s and n_off
+// Uses proper ellipse outward-normal in canvas space
+function partPx(s, n_off) {
+  const theta = s*2*Math.PI - Math.PI/2;
+  const cx0 = sx(OX + OB*Math.cos(theta));
+  const cy0 = sy(OY + OA*Math.sin(theta));
+  // Tangent in canvas space: d(cx)/dθ, d(cy)/dθ
+  const dtx = -OB*SX*Math.sin(theta);
+  const dty = -OA*SY*Math.cos(theta); // negative because sy flips y-axis
+  const tlen = Math.sqrt(dtx*dtx + dty*dty) + 1e-10;
+  // Outward normal: rotate tangent +90° in screen coords → (-dty, dtx)/tlen
+  const nx = -dty/tlen, ny = dtx/tlen;
+  // Use sim-space offset: n_off * TRACK_W/2 * 0.75 in meters, projected to canvas
+  // Effective pixel offset: proportional to track half-width in canvas normal direction
+  const hw = Math.min(SX, SY) * TRACK_W/2 * 0.75; // pixels
+  return { cx: cx0 + n_off*hw*nx, cy: cy0 + n_off*hw*ny };
+}
+
+const PINCH_LO=0.35, PINCH_HI=0.65, EXHAUST_LO=0.90, INJECT_S=0.01;
+function inPinch(s){ return s>=PINCH_LO && s<=PINCH_HI; }
+function inExhaust(s){ return s>=EXHAUST_LO; }
+
+// ── Coil array ─────────────────────────────────────────────────
+const N_COILS=16;
+let coilB=new Array(N_COILS).fill(1.0), selectedCoil=0;
+function getBz(s){
+  const ns=s*N_COILS, i0=Math.floor(ns)%N_COILS, i1=(i0+1)%N_COILS, f=ns-Math.floor(ns);
+  return coilB[i0]*(1-f)+coilB[i1]*f;
+}
+
+// ── State ──────────────────────────────────────────────────────
+let particles=[], flashes=[], frameCount=0, physTime=0, running=false;
+const PHYS_DT=1e-8; // 10 ns simulated per display frame
+
+// Display speed: D@1keV → 1 orbit per 72 frames at speed=5
+const REF_DS = 1/72, REF_E = 1.0, REF_M = 2.014;
+function displayDs(p){
+  const sp=SPECIES[p.species];
+  return (params.speed/5) * REF_DS * Math.sqrt(Math.max(0.02,p.energy_keV)/REF_E) * Math.sqrt(REF_M/sp.mass);
+}
+
+// ── Params ────────────────────────────────────────────────────
+let params={};
+function gv(id){ return document.getElementById(id); }
+function readParams(){
+  params={
+    speed:      +gv('ctrl-speed').value,
+    npart:      +gv('ctrl-npart').value,
+    dt_frac:    +gv('ctrl-dt').value,
+    dd_frac:    +gv('ctrl-dd').value,
+    pb_frac:    +gv('ctrl-pb').value,
+    flow:       +gv('ctrl-flow').value,
+    inj_temp:   +gv('ctrl-inj-temp').value,
+    guide_b:    +gv('ctrl-guide-b').value,
+    ex:         +gv('ctrl-ex').value*1000,
+    ey:         +gv('ctrl-ey').value*1000,
+    ohmic:      +gv('ctrl-ohmic').value*1000,
+    rf:         +gv('ctrl-rf').value*1000,
+    pinch_b:    +gv('ctrl-pinch-b').value,
+    pulse_f:    +gv('ctrl-pulse-f').value,
+    duty:       +gv('ctrl-duty').value,
+    pinch_r:    +gv('ctrl-pinch-r').value*1e-3,
+    pinch_l:    +gv('ctrl-pinch-l').value*1e-3,
+    compression:+gv('ctrl-compression').value,
+    turb_stages:+gv('ctrl-turb-stages').value,
+    turb_eff:   +gv('ctrl-turb-eff').value/100,
+    backpressure:+gv('ctrl-backp').value,
+    mhd_on:     gv('ctrl-mhd').checked,
+    mhd_eff:    +gv('ctrl-mhd-eff').value/100,
+    show_bfield:gv('disp-bfield').checked,
+    show_efield:gv('disp-efield').checked,
+    show_trails:gv('disp-trails').checked,
+    color_energy:gv('disp-energy').checked,
+    show_pinch: gv('disp-pinch').checked,
+    coil_b:     +gv('ctrl-coil-b').value,
+  };
+}
+
+// ── Diagnostics ────────────────────────────────────────────────
+let diag={ reactions:0, rxn_power:0, input_power:0, turb_power:0,
+           mhd_power:0, fuel_rate:0, exhaust_temp:0, voltage:0,
+           avg_temp:0, pinch_bz:0, rxn_frame:0 };
+
+// ── Particle factory ───────────────────────────────────────────
+function glowColor(sp, alpha){
+  const [r,g,b]=sp.glow; return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function makeParticle(species, s, energy_keV, n_off){
+  const off=(n_off!==undefined)?n_off:(Math.random()-0.5)*0.5;
+  s=((s%1)+1)%1;
+  const {cx,cy}=partPx(s,off);
+  return { species, s, n_off:off, energy_keV, alive:true,
+           age:0, passed_pinch:false, trail:[], cx, cy };
+}
+
+// ── Simulation frame ────────────────────────────────────────────
+let lastLogTime=0;
+
+function simFrame(){
+  physTime+=PHYS_DT;
+  const phase=(physTime*params.pulse_f)%1;
+  const pinchOn=phase<params.duty;
+  const bz_pinch=pinchOn?params.pinch_b:0.1;
+  diag.pinch_bz=bz_pinch;
+
+  const pinchParts=particles.filter(p=>inPinch(p.s));
+  const avgE=pinchParts.length>0 ? pinchParts.reduce((a,p)=>a+p.energy_keV,0)/pinchParts.length : 0;
+  diag.avg_temp=avgE;
+
+  const heatJ=(params.ohmic+params.rf)*PHYS_DT;
+  const heatKeV=heatJ/(C.e*1000);
+  const hPinch=pinchParts.length>0 ? heatKeV*0.75/pinchParts.length : 0;
+  const otherParts=particles.filter(p=>!inPinch(p.s));
+  const hOther=otherParts.length>0 ? heatKeV*0.25/otherParts.length : 0;
+
+  particles.forEach(p=>{
+    if(!p.alive) return;
+    p.age++;
+
+    // Heat
+    if(inPinch(p.s)){ p.energy_keV+=hPinch; p.passed_pinch=true; }
+    else { p.energy_keV+=hOther; p.energy_keV=Math.max(0.05,p.energy_keV*0.9999); }
+
+    // Display advance (scaled by speed and energy/mass)
+    let ds=displayDs(p);
+
+    // E-field tangential nudge
+    const theta=p.s*2*Math.PI-Math.PI/2;
+    const sp=SPECIES[p.species];
+    const txs=-Math.sin(theta), tys=Math.cos(theta); // sim-space tangent components (unnorm)
+    const tlen=Math.sqrt(txs*txs+tys*tys)+1e-10;
+    ds+=sp.charge*(params.ex*txs+params.ey*tys)/tlen * 0.000002;
+
+    p.s=((p.s+ds)%1+1)%1;
+
+    // Transverse dynamics: confinement from Bz + E-field normal
+    const localBz=getBz(p.s)+(inPinch(p.s)?bz_pinch:0);
+    const nxs=Math.cos(theta), nys=Math.sin(theta); // outward normal in sim-space
+    const eN=sp.charge*(params.ex*nxs+params.ey*nys)*0.00001;
+    p.n_off+=(-p.n_off*0.018*(Math.abs(localBz)+0.5)+eN);
+    if(sp.charge===0) p.n_off+=(Math.random()-0.45)*0.06; // neutrons drift outward
+    p.n_off=Math.max(-1,Math.min(1,p.n_off));
+
+    // Update canvas position
+    const pos=partPx(p.s,p.n_off);
+    p.cx=pos.cx; p.cy=pos.cy;
+
+    // Trail (canvas coords)
+    if(params.show_trails){
+      p.trail.push({cx:p.cx,cy:p.cy});
+      if(p.trail.length>28) p.trail.shift();
+    } else { p.trail=[]; }
+
+    // Neutron escape
+    if(sp.charge===0 && Math.abs(p.n_off)>0.92){ p.alive=false; return; }
+
+    // Exhaust
+    if(inExhaust(p.s) && p.passed_pinch && p.age>50){
+      diag.exhaust_temp=0.82*diag.exhaust_temp+0.18*(p.energy_keV*1000*C.e/C.k);
+      p.alive=false;
+    }
+  });
+
+  // Fusion reactions in pinch zone
+  diag.rxn_frame=0;
+  if(pinchOn && pinchParts.length>1){
+    const T=Math.max(0.5,avgE);
+    const vol=Math.PI*params.pinch_r*params.pinch_r*params.pinch_l;
+    const scale=1e14/Math.max(1,pinchParts.length);
+    REACTIONS.forEach(rxn=>{
+      const r1p=pinchParts.filter(p=>p.species===rxn.r1);
+      const r2p=pinchParts.filter(p=>p.species===rxn.r2);
+      if(!r1p.length||!r2p.length) return;
+      const n1=r1p.length*scale/vol;
+      const n2=(rxn.r1===rxn.r2?Math.max(0,r2p.length-1):r2p.length)*scale/vol;
+      if(n2<=0) return;
+      const prob=n1*n2*rxn.sigmav(T)*vol*PHYS_DT*2e5/Math.max(1,scale);
+      if(Math.random()<prob){
+        const p1=r1p[Math.floor(Math.random()*r1p.length)];
+        const cands=rxn.r1===rxn.r2?r2p.filter(p=>p!==p1):r2p;
+        if(!cands.length) return;
+        const p2=cands[Math.floor(Math.random()*cands.length)];
+        p1.alive=false; p2.alive=false;
+        const srxn=(p1.s+p2.s)*0.5;
+        rxn.products.forEach(prod=>{
+          const np=makeParticle(prod.s,srxn,prod.ek,(Math.random()-0.5)*0.25);
+          np.passed_pinch=true; np.age=15;
+          particles.push(np);
+        });
+        flashes.push({cx:(p1.cx+p2.cx)/2, cy:(p1.cy+p2.cy)/2,
+                      r:2, maxR:28, alpha:1, label:rxn.label, Q:rxn.Q});
+        diag.rxn_frame++;  diag.reactions++;
+        const Ej=rxn.Q*1e6*C.e;
+        diag.rxn_power=0.94*diag.rxn_power+0.06*Ej/PHYS_DT;
+        if(physTime-lastLogTime>0.008){
+          logEvent(`${rxn.label}  +${rxn.Q.toFixed(1)} MeV  T=${T.toFixed(0)} keV`,'react');
+          lastLogTime=physTime;
+        }
+      }
+    });
+  }
+
+  // Animate flashes
+  flashes.forEach(f=>{ f.r+=f.maxR*0.09; f.alpha-=0.055; });
+  flashes=flashes.filter(f=>f.alpha>0);
+
+  // MHD power from charged product back-pressure
+  if(diag.rxn_power>0 && params.mhd_on){
+    const emf=diag.rxn_power*0.6*params.mhd_eff/(1e14*C.e);
+    diag.voltage=0.93*diag.voltage+0.07*Math.min(emf,50000);
+    diag.mhd_power=diag.voltage*(diag.voltage/5);
+  }
+  diag.turb_power=diag.exhaust_temp*C.k*particles.length*0.001*params.turb_eff*(1-params.backpressure*0.5);
+  diag.input_power=params.ohmic+params.rf;
+  diag.fuel_rate=params.flow*0.1;
+
+  // Inject fuel (frame-based)
+  const injectEvery=Math.max(2,Math.round(9/Math.max(0.05,params.flow)));
+  if(frameCount%injectEvery===0 && particles.length<params.npart) injectFuel();
+
+  // Cull
+  particles=particles.filter(p=>p.alive);
+  if(particles.length>params.npart*2) particles=particles.slice(-params.npart*2);
+  frameCount++;
+}
+
+function injectFuel(){
+  const total=params.dt_frac+params.dd_frac+params.pb_frac;
+  if(total<=0) return;
+  const r=Math.random()*total;
+  let s1,s2;
+  if(r<params.dt_frac){s1='D';s2='T';}
+  else if(r<params.dt_frac+params.dd_frac){s1='D';s2='D';}
+  else{s1='P';s2='B11';}
+  const si=INJECT_S+(Math.random()-0.5)*0.018;
+  particles.push(makeParticle(s1, si,       params.inj_temp, (Math.random()-0.5)*0.4));
+  particles.push(makeParticle(s2,(si+0.006)%1, params.inj_temp, (Math.random()-0.5)*0.4));
+}
+
+// ── Rendering ──────────────────────────────────────────────────
+function drawParticle(p){
+  const sp=SPECIES[p.species];
+  const {cx,cy}=p;
+  const et=params.color_energy?Math.min(1,p.energy_keV/50):0;
+  const [r0,g0,b0]=sp.glow;
+  const br=(v,a)=>Math.min(255,v+Math.round(a*180));
+  const gc=`${br(r0,et*0.8)},${br(g0,et*0.6)},${br(b0,et*0.3)}`;
+  // Halo
+  const grd=ctx.createRadialGradient(cx,cy,0,cx,cy,sp.r*5);
+  grd.addColorStop(0,`rgba(${gc},0.50)`);
+  grd.addColorStop(0.4,`rgba(${gc},0.18)`);
+  grd.addColorStop(1,`rgba(${gc},0)`);
+  ctx.beginPath(); ctx.arc(cx,cy,sp.r*5,0,Math.PI*2);
+  ctx.fillStyle=grd; ctx.fill();
+  // Core
+  ctx.beginPath(); ctx.arc(cx,cy,sp.r,0,Math.PI*2);
+  ctx.fillStyle=sp.color; ctx.fill();
+}
+
+function drawTrail(p){
+  if(p.trail.length<2) return;
+  const sp=SPECIES[p.species];
+  ctx.beginPath();
+  let started=false;
+  for(const pt of p.trail){
+    if(!started){ctx.moveTo(pt.cx,pt.cy);started=true;}
+    else ctx.lineTo(pt.cx,pt.cy);
+  }
+  ctx.strokeStyle=glowColor(sp,0.25);
+  ctx.lineWidth=1.4;
+  ctx.stroke();
+}
+
+function drawFlash(f){
+  const grd=ctx.createRadialGradient(f.cx,f.cy,0,f.cx,f.cy,f.r);
+  grd.addColorStop(0,  `rgba(255,255,200,${f.alpha*0.92})`);
+  grd.addColorStop(0.3,`rgba(255,200, 50,${f.alpha*0.55})`);
+  grd.addColorStop(0.7,`rgba(255,  60,  0,${f.alpha*0.22})`);
+  grd.addColorStop(1,  `rgba(255,  20,  0,0)`);
+  ctx.beginPath(); ctx.arc(f.cx,f.cy,f.r,0,Math.PI*2);
+  ctx.fillStyle=grd; ctx.fill();
+  if(f.alpha>0.45){
+    ctx.fillStyle=`rgba(255,240,160,${(f.alpha-0.45)*1.8})`;
+    ctx.font='bold 10px Courier New'; ctx.textAlign='center';
+    ctx.fillText(f.label, f.cx, f.cy-f.r-4);
+  }
+}
+
+function drawTrack(){
+  ctx.save();
+  // Channel fill (even-odd: outer ellipse minus inner)
+  ctx.beginPath();
+  for(let i=0;i<=80;i++){const t=i/80*2*Math.PI;
+    const x=sx(OX+(OB+TRACK_W*0.5)*Math.cos(t)), y=sy(OY+(OA+TRACK_W*0.5)*Math.sin(t));
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.closePath();
+  for(let i=80;i>=0;i--){const t=i/80*2*Math.PI;
+    const x=sx(OX+(OB-TRACK_W*0.5)*Math.cos(t)), y=sy(OY+(OA-TRACK_W*0.5)*Math.sin(t));
+    i===80?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.closePath();
+  ctx.fillStyle='#0c1014'; ctx.fill('evenodd');
+  // Walls
+  for(const dr of [0.5,-0.5]){
+    ctx.beginPath();
+    for(let i=0;i<=80;i++){const t=i/80*2*Math.PI;
+      const x=sx(OX+(OB+TRACK_W*dr)*Math.cos(t)), y=sy(OY+(OA+TRACK_W*dr)*Math.sin(t));
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.closePath(); ctx.strokeStyle='#304868'; ctx.lineWidth=1.5; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawPinch(){
+  if(!params.show_pinch) return;
+  ctx.save();
+  const phase=(physTime*params.pulse_f)%1, on=phase<params.duty;
+  const alpha=on?0.30+0.18*Math.sin(physTime*params.pulse_f*2*Math.PI*6):0.07;
+  ctx.beginPath();
+  const ths=PINCH_LO*2*Math.PI-Math.PI/2, the=PINCH_HI*2*Math.PI-Math.PI/2;
+  for(let i=0;i<=40;i++){const t=ths+(the-ths)*i/40;
+    const x=sx(OX+(OB+TRACK_W*0.52)*Math.cos(t)), y=sy(OY+(OA+TRACK_W*0.52)*Math.sin(t));
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  for(let i=40;i>=0;i--){const t=ths+(the-ths)*i/40;
+    ctx.lineTo(sx(OX+(OB-TRACK_W*0.52)*Math.cos(t)), sy(OY+(OA-TRACK_W*0.52)*Math.sin(t)));}
+  ctx.closePath();
+  ctx.fillStyle=on?`rgba(60,110,255,${alpha})`:`rgba(25,45,140,${alpha})`; ctx.fill();
+  const top=ovalPt(Math.PI/2);
+  ctx.fillStyle=on?'#88aaff':'#3a4a66'; ctx.font='11px Courier New'; ctx.textAlign='center';
+  ctx.fillText(`▼ PINCH ${on?'ON ':'OFF'} ${diag.pinch_bz.toFixed(0)}T`,
+               sx(top.x), sy(top.y+OA+TRACK_W*0.65+0.001));
+  ctx.restore();
+}
+
+function drawExhaustZone(){
+  ctx.save();
+  const bot=ovalPt(-Math.PI/2);
+  const bx=sx(bot.x-0.006), by=sy(bot.y+0.0005);
+  const bw=sx(bot.x+0.006)-bx, bh=sy(bot.y-0.005)-by;
+  ctx.fillStyle='#0b160b'; ctx.fillRect(bx,by,bw,bh);
+  ctx.strokeStyle='#284428'; ctx.lineWidth=1; ctx.strokeRect(bx,by,bw,bh);
+  ctx.fillStyle='#4a7a4a'; ctx.font='9px Courier New'; ctx.textAlign='center';
+  ctx.fillText('INJECTOR',sx(bot.x-0.003),sy(bot.y-0.0012));
+  ctx.fillText('TURBINE', sx(bot.x+0.003),sy(bot.y-0.0012));
+  // Spinning fan
+  const tx=sx(bot.x+0.003), ty=sy(bot.y-0.003), a0=frameCount*0.04;
+  for(let i=0;i<3;i++){const a=i*2*Math.PI/3+a0;
+    ctx.beginPath(); ctx.moveTo(tx,ty);
+    ctx.arc(tx,ty,7,a,a+1.0); ctx.closePath();
+    ctx.fillStyle='rgba(50,180,50,0.5)'; ctx.fill();}
+  ctx.restore();
+}
+
+function drawCoils(){
+  ctx.save();
+  for(let i=0;i<N_COILS;i++){
+    const s=i/N_COILS, theta=s*2*Math.PI-Math.PI/2;
+    const rx=OX+(OB+TRACK_W*0.78)*Math.cos(theta), ry=OY+(OA+TRACK_W*0.78)*Math.sin(theta);
+    const intensity=Math.min(1,Math.abs(coilB[i])/5);
+    const col=coilB[i]>=0?`rgba(80,130,255,${0.25+0.65*intensity})`:`rgba(255,80,80,${0.25+0.65*intensity})`;
+    ctx.beginPath(); ctx.arc(sx(rx),sy(ry),4.5,0,2*Math.PI);
+    ctx.fillStyle=i===selectedCoil?'#ffff55':col; ctx.fill();
+    ctx.strokeStyle='#1a1a2a'; ctx.lineWidth=0.5; ctx.stroke();
+    ctx.fillStyle=i===selectedCoil?'#ffee00':'#3a4a5a';
+    ctx.font='7px Courier New'; ctx.textAlign='center';
+    ctx.fillText(i+1, sx(rx), sy(ry)+2.5);
+  }
+  ctx.restore();
+}
+
+function drawBField(){
+  if(!params.show_bfield) return;
+  ctx.save();
+  for(let gi=0;gi<7;gi++) for(let gj=0;gj<9;gj++){
+    const x=0.001+gi*(SIM_W-0.002)/6, y=0.001+gj*(SIM_H-0.002)/8;
+    let bz=params.guide_b;
+    for(let i=0;i<N_COILS;i++){
+      const cp=ovalPt(i/N_COILS*2*Math.PI-Math.PI/2);
+      const dx=x-cp.x,dy=y-cp.y,d=Math.sqrt(dx*dx+dy*dy)+0.003;
+      bz+=coilB[i]*0.0005/(d*d);
+    }
+    const sz=Math.min(3.5,Math.abs(bz)*0.4+0.3);
+    ctx.beginPath(); ctx.arc(sx(x),sy(y),sz,0,2*Math.PI);
+    ctx.fillStyle=bz>0?`rgba(65,105,195,0.20)`:`rgba(195,65,65,0.20)`; ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawEField(){
+  if(!params.show_efield) return;
+  ctx.save();
+  const sc=0.00011;
+  for(let gi=0;gi<6;gi++) for(let gj=0;gj<8;gj++){
+    const x=0.001+gi*(SIM_W-0.002)/5, y=0.001+gj*(SIM_H-0.002)/7;
+    const ex=params.ex*sc, ey=params.ey*sc;
+    if(Math.abs(ex)<1e-8&&Math.abs(ey)<1e-8) continue;
+    ctx.beginPath(); ctx.moveTo(sx(x),sy(y)); ctx.lineTo(sx(x+ex),sy(y+ey));
+    ctx.strokeStyle='rgba(255,220,50,0.35)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(sx(x+ex),sy(y+ey),2,0,2*Math.PI);
+    ctx.fillStyle='rgba(255,220,50,0.5)'; ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawSpeciesOverlay(){
+  ctx.save();
+  const sc={};
+  for(const p of particles) sc[p.species]=(sc[p.species]||0)+1;
+  ctx.font='10px Courier New'; ctx.textAlign='left';
+  let oy=16, ox=CW-125;
+  for(const [key,sp] of Object.entries(SPECIES)){
+    if(!(sc[key]>0)) continue;
+    ctx.fillStyle=sp.color+'cc';
+    ctx.fillText(`${sp.name}  ${sc[key]}`, ox, oy); oy+=13;
+  }
+  ctx.fillStyle='#445566';
+  ctx.fillText(`t=${(physTime*1e6).toFixed(1)} µs`, ox, oy); oy+=13;
+  ctx.fillText(`rxns: ${diag.reactions}`, ox, oy);
+  ctx.restore();
+}
+
+function render(){
+  // Motion-blur fade (like old sim) instead of clear
+  ctx.fillStyle='rgba(8,8,18,0.28)';
+  ctx.fillRect(0,0,CW,CH);
+
+  // Static structural elements (fully opaque → clean over blur)
+  drawBField();
+  drawEField();
+  drawTrack();
+  drawPinch();
+  drawExhaustZone();
+  drawCoils();
+
+  // Particle trails then cores
+  if(params.show_trails) for(const p of particles) drawTrail(p);
+  for(const p of particles) drawParticle(p);
+
+  // Fusion flashes
+  for(const f of flashes) drawFlash(f);
+
+  // Text overlay
+  drawSpeciesOverlay();
+}
+
+// ── Stats panel ────────────────────────────────────────────────
+let rxnSmooth=0;
+function updateStats(){
+  rxnSmooth=0.94*rxnSmooth+0.06*diag.rxn_frame;
+  const net=(diag.rxn_power+diag.turb_power+diag.mhd_power-diag.input_power)/1000;
+  const eff=diag.input_power>0?Math.max(0,net*1000/diag.input_power*100):0;
+  gv('s-fuel').textContent=diag.fuel_rate.toFixed(3);
+  gv('s-temp').textContent=diag.avg_temp.toFixed(1);
+  gv('s-bz').textContent=(diag.pinch_bz||0).toFixed(1);
+  gv('s-react').textContent=Math.round(rxnSmooth*1e5);
+  gv('s-power').textContent=net.toFixed(2);
+  gv('s-eff').textContent=eff.toFixed(1);
+  gv('s-exhaust').textContent=Math.round(diag.exhaust_temp);
+  gv('s-volt').textContent=Math.round(diag.voltage);
+}
+
+// ── Log ────────────────────────────────────────────────────────
+function logEvent(msg,type='entry'){
+  const log=gv('log'), d=document.createElement('div');
+  d.className=`entry ${type}`;
+  d.textContent=`[${(physTime*1e6).toFixed(1)}µs] ${msg}`;
+  log.appendChild(d);
+  while(log.children.length>50) log.removeChild(log.firstChild);
+  log.scrollTop=log.scrollHeight;
+}
+
+// ── Coil UI ────────────────────────────────────────────────────
+function buildMagnetUI(){
+  const c=gv('magnet-array'); c.innerHTML='';
+  for(let i=0;i<N_COILS;i++){
+    const b=document.createElement('button');
+    b.id=`coil-btn-${i}`; b.textContent=i+1;
+    b.style.cssText='padding:2px;font-size:9px;min-width:24px';
+    if(i===selectedCoil) b.classList.add('active');
+    b.addEventListener('click',()=>{
+      selectedCoil=i;
+      gv('ctrl-coil-b').value=coilB[i];
+      gv('v-coil-b').textContent=coilB[i].toFixed(1);
+      buildMagnetUI();
+    });
+    c.appendChild(b);
+  }
+}
+function updateCoilBtnColors(){
+  for(let i=0;i<N_COILS;i++){
+    const b=document.getElementById(`coil-btn-${i}`); if(!b) continue;
+    const intensity=Math.min(1,Math.abs(coilB[i])/5);
+    if(i===selectedCoil){b.style.background='#554400';b.style.borderColor='#ffee44';}
+    else if(coilB[i]>=0){b.style.background=`rgba(25,35,${70+Math.round(130*intensity)},1)`;b.style.borderColor='#335';}
+    else{b.style.background=`rgba(${70+Math.round(110*intensity)},25,25,1)`;b.style.borderColor='#622';}
+  }
+}
+
+// ── Sliders ────────────────────────────────────────────────────
+function bindSlider(id,vid,fmt){
+  const el=gv(id),vl=gv(vid);
+  el.addEventListener('input',()=>{vl.textContent=fmt(+el.value);});
+}
+bindSlider('ctrl-speed','v-speed',v=>`${v}x`);
+bindSlider('ctrl-npart','v-npart',v=>`${v}`);
+bindSlider('ctrl-dt','v-dt',v=>`${Math.round(v*100)}%`);
+bindSlider('ctrl-dd','v-dd',v=>`${Math.round(v*100)}%`);
+bindSlider('ctrl-pb','v-pb',v=>`${Math.round(v*100)}%`);
+bindSlider('ctrl-flow','v-flow',v=>v.toFixed(2));
+bindSlider('ctrl-inj-temp','v-inj-temp',v=>v.toFixed(1));
+bindSlider('ctrl-guide-b','v-guide-b',v=>v.toFixed(1));
+bindSlider('ctrl-ex','v-ex',v=>v.toFixed(1));
+bindSlider('ctrl-ey','v-ey',v=>v.toFixed(1));
+bindSlider('ctrl-ohmic','v-ohmic',v=>Math.round(v));
+bindSlider('ctrl-rf','v-rf',v=>Math.round(v));
+bindSlider('ctrl-pinch-b','v-pinch-b',v=>Math.round(v));
+bindSlider('ctrl-pulse-f','v-pulse-f',v=>v.toFixed(1));
+bindSlider('ctrl-duty','v-duty',v=>`${Math.round(v*100)}%`);
+bindSlider('ctrl-pinch-r','v-pinch-r',v=>v.toFixed(1));
+bindSlider('ctrl-pinch-l','v-pinch-l',v=>v.toFixed(1));
+bindSlider('ctrl-compression','v-compression',v=>Math.round(v));
+bindSlider('ctrl-turb-stages','v-turb-stages',v=>Math.round(v));
+bindSlider('ctrl-turb-eff','v-turb-eff',v=>`${Math.round(v)}%`);
+bindSlider('ctrl-backp','v-backp',v=>v.toFixed(2));
+bindSlider('ctrl-mhd-eff','v-mhd-eff',v=>`${Math.round(v)}%`);
+bindSlider('ctrl-coil-b','v-coil-b',v=>{
+  coilB[selectedCoil]=v; updateCoilBtnColors(); return v.toFixed(1);
+});
+
+// ── Buttons ────────────────────────────────────────────────────
+gv('btn-run').addEventListener('click',()=>{
+  running=true;
+  gv('btn-run').classList.add('active'); gv('btn-pause').classList.remove('active');
+  logEvent('Simulation started','entry');
+});
+gv('btn-pause').addEventListener('click',()=>{
+  running=false;
+  gv('btn-pause').classList.add('active'); gv('btn-run').classList.remove('active');
+});
+gv('btn-reset').addEventListener('click',()=>{
+  particles=[]; flashes=[]; frameCount=0; physTime=0;
+  diag={reactions:0,rxn_power:0,input_power:0,turb_power:0,
+        mhd_power:0,fuel_rate:0,exhaust_temp:0,voltage:0,avg_temp:0,pinch_bz:0,rxn_frame:0};
+  logEvent('Reset','warn');
+});
+gv('btn-step').addEventListener('click',()=>{
+  readParams(); if(!running){simFrame(); render(); updateStats();}
+});
+gv('btn-coil-zero').addEventListener('click',()=>{ coilB.fill(0); updateCoilBtnColors(); });
+gv('btn-coil-guide').addEventListener('click',()=>{
+  readParams(); coilB.fill(params.guide_b); updateCoilBtnColors();
+});
+gv('btn-coil-focus').addEventListener('click',()=>{
+  readParams();
+  for(let i=0;i<N_COILS;i++) coilB[i]=inPinch(i/N_COILS)?params.guide_b*2:params.guide_b;
+  updateCoilBtnColors();
+});
+
+// ── Main loop ──────────────────────────────────────────────────
+function loop(){
+  requestAnimationFrame(loop);
+  readParams();
+  if(running) simFrame();
+  render();
+  updateStats();
+  updateCoilBtnColors();
+}
+
+buildMagnetUI();
+gv('btn-coil-guide').click();
+logEvent('System ready — press ▶ RUN','entry');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
