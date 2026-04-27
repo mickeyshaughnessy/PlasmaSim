@@ -263,8 +263,8 @@ const RING_INNER_FRAC = 0.19;
 const RING_OUTER_FRAC = 0.44;
 
 // Circuit geometry fractions of min(W,H)
-const CIRC_AX = 0.42, CIRC_AY = 0.24;   // outer ellipse semi-axes
-const CIRC_ax = 0.22, CIRC_ay = 0.13;   // inner ellipse semi-axes
+const CIRC_AX = 0.88, CIRC_AY = 0.84;   // outer semi-axes as fractions of W/2 and H/2
+const CIRC_ax = 0.52, CIRC_ay = 0.50;   // inner semi-axes as fractions of W/2 and H/2
 // Port angles (canvas: y↓, so θ=π+0.28 is upper-left, π-0.28 is lower-left)
 const INJ_THETA   = Math.PI + 0.28;      // injection port centre
 const EXH_THETA   = Math.PI - 0.28;      // exhaust port centre
@@ -325,19 +325,17 @@ function angDiff(a, b) {
 }
 
 function getRo(theta, W, H) {
-  const S = Math.min(W, H);
-  const Ax = CIRC_AX * S, Ay = CIRC_AY * S;
+  const Ax = CIRC_AX * W * 0.5, Ay = CIRC_AY * H * 0.5;
   const c = Math.cos(theta), s = Math.sin(theta);
   return Ax * Ay / Math.sqrt(Ay*Ay*c*c + Ax*Ax*s*s);
 }
 
 function getRi(theta, W, H) {
-  const S = Math.min(W, H);
-  const ax = CIRC_ax * S, ay = CIRC_ay * S;
+  const ax = CIRC_ax * W * 0.5, ay = CIRC_ay * H * 0.5;
   const c = Math.cos(theta), s = Math.sin(theta);
   const base = ax * ay / Math.sqrt(ay*ay*c*c + ax*ax*s*s);
   const td = angDiff(theta, 0);
-  const bump = pinchAmp_c * S * Math.exp(-td*td / PINCH_SIG2);
+  const bump = pinchAmp_c * Math.min(W, H) * 0.5 * Math.exp(-td*td / PINCH_SIG2);
   return Math.min(base + bump, getRo(theta, W, H) * 0.88);
 }
 
@@ -355,8 +353,7 @@ function coilPositions() {
       positions.push({ x: W/2 + Rm*Math.cos(a), y: H/2 + Rm*Math.sin(a) });
     }
   } else if (geometry === 'circuit') {
-    const S = Math.min(W,H);
-    const Am = (CIRC_AX + CIRC_ax)/2 * S, Bm = (CIRC_AY + CIRC_ay)/2 * S;
+    const Am = (CIRC_AX + CIRC_ax) * 0.25 * W, Bm = (CIRC_AY + CIRC_ay) * 0.25 * H;
     for (let i = 0; i < N_COILS; i++) {
       const a = (2*Math.PI*i) / N_COILS;
       positions.push({ x: W/2 + Am*Math.cos(a), y: H/2 + Bm*Math.sin(a) });
@@ -681,18 +678,17 @@ function injectParticles(count = 1) {
     let injKE = 0;
 
     if (geometry === 'circuit') {
-      // Spawn on ramp outside injection port, heading into circuit
-      const theta = INJ_THETA + (Math.random() - 0.5) * PORT_WIDTH * 1.4;
+      // Spawn near outer tip of injection ramp, travel radially inward into circuit
+      const theta = INJ_THETA + (Math.random() - 0.5) * PORT_WIDTH * 0.7;
       const Ro    = getRo(theta, W, H);
       const rampLen = RAMP_FRAC * Math.min(W, H);
-      const r = Ro + rampLen * (0.2 + Math.random() * 0.7);
+      const r = Ro + rampLen * (0.5 + Math.random() * 0.42);
       x = cx + r * Math.cos(theta);
       y = cy + r * Math.sin(theta);
-      // Velocity: mostly inward + CCW tangential component
-      const spd = 2.8 + Math.random();
-      const tangAngle = theta + Math.PI/2;
-      vx0 = spd * (-0.5*Math.cos(theta) + 0.85*Math.cos(tangAngle)) + gauss()*0.3;
-      vy0 = spd * (-0.5*Math.sin(theta) + 0.85*Math.sin(tangAngle)) + gauss()*0.3;
+      // Velocity: mostly radially inward along ramp, small CCW tangential twist
+      const spd = 3.2 + Math.random() * 0.8;
+      vx0 = spd * (-0.85*Math.cos(theta) - 0.28*Math.sin(theta)) + gauss()*0.15;
+      vy0 = spd * (-0.85*Math.sin(theta) + 0.28*Math.cos(theta)) + gauss()*0.15;
     } else if (geometry === 'ring') {
       const Ri = Math.min(W,H)*RING_INNER_FRAC, Ro = Math.min(W,H)*RING_OUTER_FRAC;
       const angle = Math.random() * 2*Math.PI;
@@ -758,6 +754,27 @@ function step() {
       const f  = k * particles[i].charge * particles[j].charge / (r2 * r);
       fx[i] -= f * dx;  fy[i] -= f * dy;
       fx[j] += f * dx;  fy[j] += f * dy;
+    }
+  }
+
+  // Exhaust channel: outward radial force near exit port, guides particles out
+  if (geometry === 'circuit' && exhaustEvery > 0) {
+    for (let i = 0; i < n; i++) {
+      const p = particles[i];
+      const rdx = p.x - cx, rdy = p.y - cy;
+      const r2  = rdx*rdx + rdy*rdy;
+      if (r2 < 1) continue;
+      const r     = Math.sqrt(r2);
+      const theta = Math.atan2(rdy, rdx);
+      const td    = angDiff(theta, EXH_THETA);
+      if (td > PORT_WIDTH) continue;
+      const Roi = getRo(theta, W, H), Rii = getRi(theta, W, H);
+      if (r < Rii * 0.7 || r > Roi + 4) continue;
+      const nx2 = rdx/r, ny2 = rdy/r;
+      const rFrac = Math.max(0, Math.min(1, (r - Rii) / (Roi - Rii)));
+      const str   = 0.7 * rFrac * (1 - td / PORT_WIDTH);
+      fx[i] += str * nx2;
+      fy[i] += str * ny2;
     }
   }
 
@@ -843,9 +860,16 @@ function step() {
 
       if (r > Ro) {
         if (atExhPort(theta)) {
-          // Particle exits through exhaust ramp — remove it
-          exhKEThisFrame += 0.5 * p.mass * (p.vx*p.vx + p.vy*p.vy);
-          toRemove.add(i);
+          const rampLen = RAMP_FRAC * Math.min(W, H);
+          if (r > Ro + rampLen * 0.85) {
+            // Reached end of exhaust ramp — remove
+            exhKEThisFrame += 0.5 * p.mass * (p.vx*p.vx + p.vy*p.vy);
+            toRemove.add(i);
+          } else {
+            // Traveling the exhaust ramp — nudge outward if drifting back
+            const vr = p.vx*nx + p.vy*ny;
+            if (vr < 0.4) { p.vx += nx * 0.5; p.vy += ny * 0.5; }
+          }
         } else if (atInjPort(theta)) {
           // Let injected particles pass through — push them gently inward
           p.x = cx + nx * (Ro - 2); p.y = cy + ny * (Ro - 2);
@@ -1070,7 +1094,7 @@ function drawRamp(cx, cy, theta, rampLen, halfW, color, label) {
 function drawCircuit(W, H) {
   const cx = W/2, cy = H/2;
   const S  = Math.min(W, H);
-  const Ao = CIRC_AX*S, Bo = CIRC_AY*S;
+  const Ao = CIRC_AX * W * 0.5, Bo = CIRC_AY * H * 0.5;
   const rampLen = RAMP_FRAC * S;
 
   // Darken outside the outer ellipse
@@ -1082,32 +1106,29 @@ function drawCircuit(W, H) {
   ctx.fill('evenodd');
 
   // Darken inner ellipse (base, no pinch for visual simplicity)
-  const ai = CIRC_ax*S, bi = CIRC_ay*S;
+  const ai = CIRC_ax * W * 0.5, bi = CIRC_ay * H * 0.5;
   ctx.beginPath();
   ctx.ellipse(cx, cy, ai, bi, 0, 0, Math.PI*2);
   ctx.fill();
   ctx.restore();
 
-  // Outer wall (open at ports)
+  // Outer wall (open at ports) — use polar coords, consistent with physics
   ctx.strokeStyle = '#2a3a6a';
   ctx.lineWidth = 1.5;
-  const portGap = PORT_WIDTH * 1.1;
-  for (const portCenter of [INJ_THETA, EXH_THETA]) {
-    const start = portCenter + portGap, end = portCenter + 2*Math.PI - portGap;
-    ctx.beginPath();
-    // Draw arc avoiding port gap — use parametric since it's an ellipse
-    const steps = 120;
-    let drawing = false;
-    for (let s = 0; s <= steps; s++) {
-      const a = start + (end - start) * s / steps;
-      const ad = angDiff(a, portCenter);
-      if (ad < portGap) { drawing = false; continue; }
-      const px2 = cx + Ao*Math.cos(a), py2 = cy + Bo*Math.sin(a);
-      if (!drawing) { ctx.moveTo(px2, py2); drawing = true; }
-      else ctx.lineTo(px2, py2);
+  const portGap = PORT_WIDTH * 1.05;
+  ctx.beginPath();
+  let owStarted = false;
+  for (let s = 0; s <= 240; s++) {
+    const a = (2 * Math.PI * s) / 240;
+    if (angDiff(a, INJ_THETA) < portGap || angDiff(a, EXH_THETA) < portGap) {
+      owStarted = false; continue;
     }
-    ctx.stroke();
+    const ro = getRo(a, W, H);
+    const px2 = cx + ro*Math.cos(a), py2 = cy + ro*Math.sin(a);
+    if (!owStarted) { ctx.moveTo(px2, py2); owStarted = true; }
+    else ctx.lineTo(px2, py2);
   }
+  ctx.stroke();
 
   // Inner wall (with live pinch shape)
   ctx.strokeStyle = '#2a3a6a';
