@@ -43,43 +43,36 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
 }
 .btn:hover { background: #1c1c3e; }
 .btn.active { outline: 1.5px solid currentColor; outline-offset: -1.5px; background: #181840; }
-/* Particle type selector */
 #ptype-row { display: flex; gap: 3px; }
 .ptype-btn {
-  flex: 1;
-  padding: 5px 2px;
-  border: 1px solid #22223a;
-  background: #0e0e28;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: bold;
-  text-align: center;
-  transition: background 0.1s;
-  line-height: 1.4;
+  flex: 1; padding: 5px 2px;
+  border: 1px solid #22223a; background: #0e0e28;
+  border-radius: 4px; cursor: pointer;
+  font-size: 10px; font-weight: bold; text-align: center;
+  transition: background 0.1s; line-height: 1.4;
 }
 .ptype-btn:hover  { background: #1a1a3a; }
 .ptype-btn.active { outline: 1.5px solid currentColor; outline-offset: -1.5px; background: #161644; }
-/* Geometry toggle */
-.geo-row { display: flex; gap: 5px; }
-.geo-btn { flex: 1; }
-/* Presets grid */
+.geo-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.geo-btn { flex: 1; min-width: 46px; }
 .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-/* Stats */
 #stats { font-size: 11px; line-height: 1.9; }
 .srow { display: flex; justify-content: space-between; }
 .sv   { color: #aabbdd; }
-/* Action row */
 .act-row { display: flex; gap: 4px; }
 .act-row .btn { flex: 1; }
-/* Hint footer */
 .hint { font-size: 10px; color: #334; line-height: 1.6; margin-top: auto; padding-top: 6px; }
-/* Coil array */
 .coil-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 4px; }
 .coil-cell { text-align: center; }
 .coil-cell lbl { font-size: 9px; margin-bottom: 1px; }
 .coil-cell input[type=range] { height: 14px; }
 .coil-cell .cv { font-size: 9px; color: #556677; margin-top: 1px; }
+/* Circuit stage labels */
+.stage-label {
+  font-size: 9px; color: #556688; text-transform: uppercase;
+  letter-spacing: 0.06em; border-bottom: 1px solid #1a2030;
+  padding-bottom: 2px; margin-bottom: 4px;
+}
 </style>
 </head>
 <body>
@@ -89,7 +82,6 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
 <div id="panel">
   <h1>⚡ Plasma Simulator</h1>
 
-  <!-- Particle type selector -->
   <div>
     <lbl>Click canvas to add:</lbl>
     <div id="ptype-row"><!-- built by JS --></div>
@@ -97,27 +89,23 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
 
   <div class="sep"></div>
 
-  <!-- Temperature -->
   <div>
     <lbl>Temperature</lbl>
     <input type="range" id="sl-temp" min="0" max="10" step="0.1" value="2">
     <div class="val" id="v-temp">T = 2.0</div>
   </div>
 
-  <!-- B field (background uniform) -->
   <div>
     <lbl>Background B field (B⊥)</lbl>
     <input type="range" id="sl-b" min="-3" max="3" step="0.01" value="0">
     <div class="val" id="v-b">B = 0.00</div>
   </div>
 
-  <!-- Coil array -->
   <div>
     <lbl>Coil Array — B_z per coil</lbl>
     <div class="coil-grid" id="coil-grid"><!-- built by JS --></div>
   </div>
 
-  <!-- Pulse controls -->
   <div>
     <lbl>Pulse speed (traveling wave)</lbl>
     <input type="range" id="sl-pulse-spd" min="-5" max="5" step="0.05" value="0">
@@ -129,7 +117,6 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
     <div class="val" id="v-pulse-amp">1.50</div>
   </div>
 
-  <!-- Damping -->
   <div>
     <lbl>Damping</lbl>
     <input type="range" id="sl-damp" min="0.95" max="1.0" step="0.001" value="0.999">
@@ -138,19 +125,51 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
 
   <div class="sep"></div>
 
-  <!-- Geometry -->
   <div>
     <lbl>Boundary</lbl>
     <div class="geo-row">
-      <button class="btn geo-btn active" id="btn-torus" onclick="setGeo('torus')">⭕ Torus</button>
-      <button class="btn geo-btn"        id="btn-box"   onclick="setGeo('box')">⬜ Box</button>
-      <button class="btn geo-btn"        id="btn-ring"  onclick="setGeo('ring')">◎ Ring</button>
+      <button class="btn geo-btn active" id="btn-torus"   onclick="setGeo('torus')">⭕ Torus</button>
+      <button class="btn geo-btn"        id="btn-box"     onclick="setGeo('box')">⬜ Box</button>
+      <button class="btn geo-btn"        id="btn-ring"    onclick="setGeo('ring')">◎ Ring</button>
+      <button class="btn geo-btn"        id="btn-circuit" onclick="setGeo('circuit')">⬭ Circuit</button>
     </div>
   </div>
 
   <div class="sep"></div>
 
-  <!-- Presets -->
+  <!-- Circuit-specific controls (shown always, used in circuit mode) -->
+  <div id="circuit-panel">
+    <div class="stage-label">⬭ Circuit — Injection Stage</div>
+    <div>
+      <lbl>Fuel: ²D fraction</lbl>
+      <input type="range" id="sl-fuel-d" min="0" max="1" step="0.05" value="0.4">
+      <div class="val" id="v-fuel-d">0.40</div>
+    </div>
+    <div>
+      <lbl>Fuel: ³T fraction</lbl>
+      <input type="range" id="sl-fuel-t" min="0" max="1" step="0.05" value="0.4">
+      <div class="val" id="v-fuel-t">0.40</div>
+    </div>
+    <div>
+      <lbl>Fuel: ³He fraction</lbl>
+      <input type="range" id="sl-fuel-he3" min="0" max="1" step="0.05" value="0.2">
+      <div class="val" id="v-fuel-he3">0.20</div>
+    </div>
+    <div class="stage-label" style="margin-top:6px">⬭ Circuit — Pinch Stage</div>
+    <div>
+      <lbl>Pinch amplitude</lbl>
+      <input type="range" id="sl-pinch-amp" min="0" max="0.18" step="0.005" value="0">
+      <div class="val" id="v-pinch-amp">Off</div>
+    </div>
+    <div>
+      <lbl>Pinch rate (oscillation)</lbl>
+      <input type="range" id="sl-pinch-rate" min="0" max="0.15" step="0.005" value="0">
+      <div class="val" id="v-pinch-rate">Off</div>
+    </div>
+  </div>
+
+  <div class="sep"></div>
+
   <div>
     <lbl>Presets</lbl>
     <div class="preset-grid">
@@ -161,12 +180,12 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
       <button class="btn" onclick="loadPreset('twostream')">Two-Stream</button>
       <button class="btn" onclick="loadPreset('hot')">Hot Mix</button>
       <button class="btn" onclick="loadPreset('ring')">◎ Ring Flow</button>
+      <button class="btn" onclick="loadPreset('circuit')">⬭ Circuit Flow</button>
     </div>
   </div>
 
   <div class="sep"></div>
 
-  <!-- Particle flow -->
   <div>
     <lbl>Injection rate</lbl>
     <input type="range" id="sl-inject" min="0" max="10" step="0.5" value="2">
@@ -180,23 +199,21 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
 
   <div class="sep"></div>
 
-  <!-- Stats -->
   <div id="stats"></div>
 
   <div class="sep"></div>
 
-  <!-- Actions -->
   <div class="act-row">
-    <button class="btn" id="btn-pause"  onclick="togglePause()">⏸ Pause</button>
-    <button class="btn" id="btn-reset"  onclick="resetSim()">↺ Reset</button>
-    <button class="btn"                 onclick="clearAll()">✕ Clear</button>
+    <button class="btn" id="btn-pause" onclick="togglePause()">⏸ Pause</button>
+    <button class="btn" id="btn-reset" onclick="resetSim()">↺ Reset</button>
+    <button class="btn"                onclick="clearAll()">✕ Clear</button>
   </div>
 
   <div class="hint">
     Click canvas to place particles.<br>
-    <span style="color:#44ccff">²D</span> + <span style="color:#44ffaa">³T</span>
-    → <span style="color:#ffee44">⁴He</span> + flash when close!<br>
-    Torus: edges wrap. Ring: annular confinement.
+    <span style="color:#44ccff">²D</span>+<span style="color:#44ffaa">³T</span>→<span style="color:#ffee44">⁴He</span> neutronic (green flash)<br>
+    <span style="color:#44ccff">²D</span>+<span style="color:#ff55cc">³He</span>→<span style="color:#ffee44">⁴He</span>+p aneutronic<br>
+    Circuit: injection ramp (left↑), exhaust (left↓), pinch (right).
   </div>
 </div>
 
@@ -225,31 +242,38 @@ const SPECIES = {
 };
 
 // Fusion reactions: key = [typeA,typeB].sort().join('+')
-// neutronic: fast neutron escapes (shown with green flash)
-// byproduct / byproduct2 / triple: additional product particles
 const REACTIONS = {
-  // ── Neutronic ─────────────────────────────────────────
-  'D+T':     { product: 'He',  kick: 9,   name: 'D+T → ⁴He+n',      neutronic: true  },
-  'D+D':     { product: 'He3', kick: 4,   name: 'D+D → ³He+n',       neutronic: true  },
-  // ── Aneutronic ────────────────────────────────────────
-  'H+H':     { product: 'D',   kick: 2.5, name: 'H+H → ²D'                             },
-  'H+T':     { product: 'He',  kick: 6,   name: 'H+T → ⁴He'                            },
-  'D+H':     { product: 'T',   kick: 4,   name: 'D+H → ³T'                              },
-  'D+He3':   { product: 'He',  kick: 10,  name: 'D+³He → ⁴He+p',     byproduct: 'H'   },
-  'B11+H':   { product: 'He',  kick: 8,   name: 'p+¹¹B → 3⁴He',      triple: true     },
-  'He3+He3': { product: 'He',  kick: 6,   name: '³He+³He → ⁴He+2p',  byproduct2: 'H'  },
+  'D+T':     { product: 'He',  kick: 9,   name: 'D+T → ⁴He+n',     neutronic: true  },
+  'D+D':     { product: 'He3', kick: 4,   name: 'D+D → ³He+n',      neutronic: true  },
+  'H+H':     { product: 'D',   kick: 2.5, name: 'H+H → ²D'                           },
+  'H+T':     { product: 'He',  kick: 6,   name: 'H+T → ⁴He'                          },
+  'D+H':     { product: 'T',   kick: 4,   name: 'D+H → ³T'                            },
+  'D+He3':   { product: 'He',  kick: 10,  name: 'D+³He → ⁴He+p',    byproduct: 'H'   },
+  'B11+H':   { product: 'He',  kick: 8,   name: 'p+¹¹B → 3⁴He',     triple: true     },
+  'He3+He3': { product: 'He',  kick: 6,   name: '³He+³He → ⁴He+2p', byproduct2: 'H'  },
 };
 
-// ─── Simulation constants ──────────────────────────────────
+// ─── Constants ────────────────────────────────────────────
 const SOFT        = 12;
 const DT          = 0.35;
 const TRAIL_MAX   = 22;
 const FUSION_R    = 12;
 const FUSION_PROB = 0.022;
 const MAX_SPD     = 48;
-const GHOST_DIST  = 55;   // torus ghost rendering margin
+const GHOST_DIST  = 55;
 const RING_INNER_FRAC = 0.19;
 const RING_OUTER_FRAC = 0.44;
+
+// Circuit geometry fractions of min(W,H)
+const CIRC_AX = 0.42, CIRC_AY = 0.24;   // outer ellipse semi-axes
+const CIRC_ax = 0.22, CIRC_ay = 0.13;   // inner ellipse semi-axes
+// Port angles (canvas: y↓, so θ=π+0.28 is upper-left, π-0.28 is lower-left)
+const INJ_THETA   = Math.PI + 0.28;      // injection port centre
+const EXH_THETA   = Math.PI - 0.28;      // exhaust port centre
+const PORT_WIDTH  = 0.22;               // port half-angular-width (rad)
+const RAMP_FRAC   = 0.13;               // ramp length as fraction of min(W,H)
+const PINCH_SIG2  = 0.18;               // angular spread of pinch (rad²)
+const KE_HIST_LEN = 300;               // frames of energy history
 
 // ─── State ────────────────────────────────────────────────
 let particles    = [];
@@ -263,25 +287,66 @@ let temperature  = 2;
 let geometry     = 'torus';
 let fusionCount  = 0;
 let savedState   = null;
-let activePreset = null;   // preset currently injecting particles
+let activePreset = null;
 let frameCount   = 0;
-let injectEvery  = 50;     // frames between injections (0 = off)
-let injectRate   = 2;      // raw slider value, used for batch size
-let exhaustEvery = 0;      // frames between removals  (0 = off)
-const INJECT_CAP = 400;    // max particles before injection pauses
+let injectEvery  = 50;
+let injectRate   = 2;
+let exhaustEvery = 0;
+const INJECT_CAP = 400;
 
-// Map slider 0-10 → frame interval and batch size
 function rateToEvery(r) { return r <= 0 ? 0 : Math.max(8, Math.round(80 / r)); }
 function rateToCount(r) { return r <= 0 ? 0 : Math.max(1, Math.round(r / 2)); }
 
 // ─── Coil array ───────────────────────────────────────────
 const N_COILS  = 6;
 let bCoils     = new Array(N_COILS).fill(0);
-let pulseSpeed = 0;   // rad/frame of traveling wave (0 = off)
-let pulseAmp   = 1.5; // amplitude of traveling wave
-let pulsePhase = 0;   // current phase accumulator
-const coilEls  = [];  // {sl, cv} references for live UI updates
+let pulseSpeed = 0;
+let pulseAmp   = 1.5;
+let pulsePhase = 0;
+const coilEls  = [];
 
+// ─── Circuit / pinch state ────────────────────────────────
+let pinchMaxAmp  = 0;    // slider: max inner-wall expansion fraction
+let pinchAmp_c   = 0;    // current effective expansion (may oscillate)
+let pinchRate_c  = 0;    // oscillation rate (rad/frame), 0 = static
+let pinchPhase_c = 0;    // accumulated pinch phase
+let fuelFracD    = 0.4;
+let fuelFracT    = 0.4;
+let fuelFracHe3  = 0.2;
+
+// Energy history arrays for graph
+let keHistory   = [];     // total KE per frame
+let eInHistory  = [];     // energy injected per frame
+let eOutHistory = [];     // energy exhausted per frame
+
+// ─── Circuit geometry helpers ─────────────────────────────
+function angDiff(a, b) {
+  let d = ((a - b) % (2*Math.PI) + 2*Math.PI) % (2*Math.PI);
+  if (d > Math.PI) d = 2*Math.PI - d;
+  return d;
+}
+
+function getRo(theta, W, H) {
+  const S = Math.min(W, H);
+  const Ax = CIRC_AX * S, Ay = CIRC_AY * S;
+  const c = Math.cos(theta), s = Math.sin(theta);
+  return Ax * Ay / Math.sqrt(Ay*Ay*c*c + Ax*Ax*s*s);
+}
+
+function getRi(theta, W, H) {
+  const S = Math.min(W, H);
+  const ax = CIRC_ax * S, ay = CIRC_ay * S;
+  const c = Math.cos(theta), s = Math.sin(theta);
+  const base = ax * ay / Math.sqrt(ay*ay*c*c + ax*ax*s*s);
+  const td = angDiff(theta, 0);
+  const bump = pinchAmp_c * S * Math.exp(-td*td / PINCH_SIG2);
+  return Math.min(base + bump, getRo(theta, W, H) * 0.88);
+}
+
+function atInjPort(theta) { return angDiff(theta, INJ_THETA) < PORT_WIDTH; }
+function atExhPort(theta) { return angDiff(theta, EXH_THETA) < PORT_WIDTH; }
+
+// ─── Coil & B helpers ─────────────────────────────────────
 function coilPositions() {
   const W = canvas.width, H = canvas.height;
   const positions = [];
@@ -290,6 +355,13 @@ function coilPositions() {
     for (let i = 0; i < N_COILS; i++) {
       const a = (2*Math.PI*i) / N_COILS;
       positions.push({ x: W/2 + Rm*Math.cos(a), y: H/2 + Rm*Math.sin(a) });
+    }
+  } else if (geometry === 'circuit') {
+    const S = Math.min(W,H);
+    const Am = (CIRC_AX + CIRC_ax)/2 * S, Bm = (CIRC_AY + CIRC_ay)/2 * S;
+    for (let i = 0; i < N_COILS; i++) {
+      const a = (2*Math.PI*i) / N_COILS;
+      positions.push({ x: W/2 + Am*Math.cos(a), y: H/2 + Bm*Math.sin(a) });
     }
   } else {
     for (let i = 0; i < N_COILS; i++) {
@@ -301,7 +373,7 @@ function coilPositions() {
 
 function getLocalB(px, py) {
   const W = canvas.width, H = canvas.height;
-  const sigma2 = geometry === 'ring'
+  const sigma2 = (geometry === 'ring' || geometry === 'circuit')
     ? Math.pow(Math.min(W,H) * 0.16, 2)
     : Math.pow(W / (N_COILS + 1) * 0.9, 2);
   const pos = coilPositions();
@@ -310,6 +382,14 @@ function getLocalB(px, py) {
     if (bCoils[i] === 0) continue;
     const dx = px - pos[i].x, dy = py - pos[i].y;
     total += bCoils[i] * Math.exp(-(dx*dx + dy*dy) / sigma2);
+  }
+  // Pinch B contribution (oscillating, concentrated at θ≈0)
+  if (geometry === 'circuit' && pinchAmp_c > 0) {
+    const cx = W/2, cy = H/2;
+    const theta = Math.atan2(py - cy, px - cx);
+    const td = angDiff(theta, 0);
+    const pinchB = 2.0 * pinchAmp_c * Math.sin(pinchPhase_c) * Math.exp(-td*td / PINCH_SIG2);
+    total += pinchB;
   }
   return total;
 }
@@ -333,9 +413,7 @@ class Particle {
 
 // ─── Helpers ──────────────────────────────────────────────
 function gauss() {
-  // Box-Muller (guard against log(0))
-  const u1 = Math.max(1e-10, Math.random());
-  const u2 = Math.random();
+  const u1 = Math.max(1e-10, Math.random()), u2 = Math.random();
   return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
 
@@ -356,24 +434,23 @@ function minImg(d, L) {
 }
 
 // ─── Preset state persistence ─────────────────────────────
-function saveInitial() {
-  savedState = particles.map(p => p.clone());
-}
+function saveInitial() { savedState = particles.map(p => p.clone()); }
 
 function resetSim() {
   if (!savedState) return;
-  particles   = savedState.map(p => p.clone());
-  flashes     = [];
-  fusionCount = 0;
+  particles = savedState.map(p => p.clone());
+  flashes = []; fusionCount = 0;
   resetCoils();
+  keHistory = []; eInHistory = []; eOutHistory = [];
+  pinchPhase_c = 0;
 }
 
 function clearAll() {
   particles = []; flashes = []; fusionCount = 0; savedState = null; activePreset = null;
+  keHistory = []; eInHistory = []; eOutHistory = [];
 }
 
 // ─── UI builders ──────────────────────────────────────────
-// Particle type buttons
 const ptypeRow = document.getElementById('ptype-row');
 for (const [id, sp] of Object.entries(SPECIES)) {
   const b = document.createElement('button');
@@ -399,9 +476,10 @@ canvas.addEventListener('click', e => {
 
 function setGeo(g) {
   geometry = g;
-  document.getElementById('btn-torus').classList.toggle('active', g === 'torus');
-  document.getElementById('btn-box').classList.toggle('active',   g === 'box');
-  document.getElementById('btn-ring').classList.toggle('active',  g === 'ring');
+  document.getElementById('btn-torus').classList.toggle('active',   g === 'torus');
+  document.getElementById('btn-box').classList.toggle('active',     g === 'box');
+  document.getElementById('btn-ring').classList.toggle('active',    g === 'ring');
+  document.getElementById('btn-circuit').classList.toggle('active', g === 'circuit');
 }
 
 function togglePause() {
@@ -409,13 +487,11 @@ function togglePause() {
   document.getElementById('btn-pause').textContent = paused ? '▶ Resume' : '⏸ Pause';
 }
 
-// Slider helper
 function wire(id, valId, fmt, cb) {
   const sl = document.getElementById(id), vl = document.getElementById(valId);
   sl.addEventListener('input', e => { const v = parseFloat(e.target.value); vl.textContent = fmt(v); cb(v); });
 }
 
-// Temperature: rescale existing particle velocities so avg KE matches new T
 function applyTemperature(newT) {
   if (particles.length > 0) {
     let ke = 0;
@@ -429,13 +505,19 @@ function applyTemperature(newT) {
   temperature = newT;
 }
 
-wire('sl-temp',   'v-temp',   v => `T = ${v.toFixed(1)}`,         applyTemperature);
-wire('sl-b',      'v-b',      v => `B = ${v.toFixed(2)}`,         v => B = v);
-wire('sl-damp',   'v-damp',   v => v.toFixed(3),                   v => damping = v);
-wire('sl-inject', 'v-inject', v => v <= 0 ? 'Off' : v.toFixed(1), v => { injectRate = v; injectEvery = rateToEvery(v); });
-wire('sl-exhaust','v-exhaust',v => v <= 0 ? 'Off' : v.toFixed(1), v => exhaustEvery = rateToEvery(v));
+wire('sl-temp',       'v-temp',      v => `T = ${v.toFixed(1)}`,          applyTemperature);
+wire('sl-b',          'v-b',         v => `B = ${v.toFixed(2)}`,          v => B = v);
+wire('sl-damp',       'v-damp',      v => v.toFixed(3),                    v => damping = v);
+wire('sl-inject',     'v-inject',    v => v <= 0 ? 'Off' : v.toFixed(1),  v => { injectRate = v; injectEvery = rateToEvery(v); });
+wire('sl-exhaust',    'v-exhaust',   v => v <= 0 ? 'Off' : v.toFixed(1),  v => exhaustEvery = rateToEvery(v));
+wire('sl-pulse-spd',  'v-pulse-spd', v => v === 0 ? 'Off' : v.toFixed(2), v => pulseSpeed = v * 0.03);
+wire('sl-pulse-amp',  'v-pulse-amp', v => v.toFixed(2),                    v => pulseAmp   = v);
+wire('sl-fuel-d',     'v-fuel-d',    v => v.toFixed(2),                    v => fuelFracD   = v);
+wire('sl-fuel-t',     'v-fuel-t',    v => v.toFixed(2),                    v => fuelFracT   = v);
+wire('sl-fuel-he3',   'v-fuel-he3',  v => v.toFixed(2),                    v => fuelFracHe3 = v);
+wire('sl-pinch-amp',  'v-pinch-amp', v => v <= 0 ? 'Off' : v.toFixed(3),  v => pinchMaxAmp = v);
+wire('sl-pinch-rate', 'v-pinch-rate',v => v <= 0 ? 'Off' : v.toFixed(3),  v => pinchRate_c = v);
 
-// Build coil sliders
 (function buildCoilUI() {
   const grid = document.getElementById('coil-grid');
   for (let i = 0; i < N_COILS; i++) {
@@ -443,10 +525,10 @@ wire('sl-exhaust','v-exhaust',v => v <= 0 ? 'Off' : v.toFixed(1), v => exhaustEv
     cell.className = 'coil-cell';
     const lbl = document.createElement('lbl');
     lbl.textContent = `C${i+1}`;
-    const sl  = document.createElement('input');
+    const sl = document.createElement('input');
     sl.type = 'range'; sl.min = -3; sl.max = 3; sl.step = 0.01; sl.value = 0;
     sl.style.width = '100%';
-    const cv  = document.createElement('div');
+    const cv = document.createElement('div');
     cv.className = 'cv'; cv.textContent = '0.00';
     sl.addEventListener('input', () => {
       bCoils[i] = parseFloat(sl.value);
@@ -458,21 +540,25 @@ wire('sl-exhaust','v-exhaust',v => v <= 0 ? 'Off' : v.toFixed(1), v => exhaustEv
   }
 })();
 
-wire('sl-pulse-spd', 'v-pulse-spd', v => v === 0 ? 'Off' : v.toFixed(2), v => pulseSpeed = v * 0.03);
-wire('sl-pulse-amp', 'v-pulse-amp', v => v.toFixed(2),                    v => pulseAmp   = v);
-
 function resetCoils() {
-  bCoils.fill(0);
-  pulsePhase = 0;
+  bCoils.fill(0); pulsePhase = 0; pulseSpeed = 0;
   syncSlider('sl-pulse-spd', 'v-pulse-spd', v => v === 0 ? 'Off' : v.toFixed(2), 0);
-  pulseSpeed = 0;
   coilEls.forEach(({ sl, cv }) => { sl.value = 0; cv.textContent = '0.00'; });
 }
 
-// Sync slider display to JS value
 function syncSlider(id, valId, fmt, val) {
   document.getElementById(id).value = val;
   document.getElementById(valId).textContent = fmt(val);
+}
+
+// ─── Circuit fuel type picker ─────────────────────────────
+function circuitFuelType() {
+  const total = fuelFracD + fuelFracT + fuelFracHe3;
+  if (total <= 0) return 'H';
+  const r = Math.random() * total;
+  if (r < fuelFracD) return 'D';
+  if (r < fuelFracD + fuelFracT) return 'T';
+  return 'He3';
 }
 
 // ─── Presets ──────────────────────────────────────────────
@@ -481,11 +567,9 @@ function loadPreset(name) {
   const W = canvas.width, H = canvas.height;
   const cx = W / 2, cy = H / 2;
 
-  // Mark live-injection presets
-  activePreset = ['neutral', 'dt', 'hot', 'ring'].includes(name) ? name : null;
+  activePreset = ['neutral', 'dt', 'hot', 'ring', 'circuit'].includes(name) ? name : null;
 
   if (name === 'dt') {
-    // Set high T for fusion to occur
     temperature = 5;
     syncSlider('sl-temp', 'v-temp', v => `T = ${v.toFixed(1)}`, temperature);
   }
@@ -498,7 +582,6 @@ function loadPreset(name) {
     }
 
   } else if (name === 'dt') {
-    // Equal D-T mix + enough electrons to quasi-neutralize
     for (let i = 0; i < 22; i++) {
       const x = cx + (Math.random()-.5)*W*.65, y = cy + (Math.random()-.5)*H*.65;
       particles.push(mkParticle(x, y, 'D'));
@@ -509,8 +592,7 @@ function loadPreset(name) {
 
   } else if (name === 'beam') {
     for (let i = 0; i < 28; i++) {
-      const y = cy + (Math.random()-.5)*H*.55;
-      const bspd = 4.5;
+      const y = cy + (Math.random()-.5)*H*.55, bspd = 4.5;
       const { vx: ivx, vy: ivy } = thermalV('H');
       particles.push(new Particle(70, y, bspd + ivx*.1, ivy*.3, 'H'));
       const { vx: evx, vy: evy } = thermalV('e');
@@ -519,8 +601,7 @@ function loadPreset(name) {
 
   } else if (name === 'vortex') {
     const ionTypes = ['H', 'D', 'T', 'He'];
-    const nRings = [16, 12, 8];
-    const radii  = [0.30, 0.18, 0.09];
+    const nRings = [16, 12, 8], radii = [0.30, 0.18, 0.09];
     for (let ri = 0; ri < nRings.length; ri++) {
       const n = nRings[ri], rad = Math.min(W, H) * radii[ri];
       for (let i = 0; i < n; i++) {
@@ -536,16 +617,13 @@ function loadPreset(name) {
 
   } else if (name === 'twostream') {
     for (let i = 0; i < 38; i++) {
-      const x = Math.random() * W;
-      const bv = 3.2;
+      const x = Math.random() * W, bv = 3.2;
       const { vx: v1x, vy: v1y } = thermalV('e');
       const { vx: v2x, vy: v2y } = thermalV('e');
-      particles.push(new Particle(x, cy - 70 + gauss()*35,  bv + v1x*.3, v1y*.3, 'e'));
-      particles.push(new Particle(x, cy + 70 + gauss()*35, -bv + v2x*.3, v2y*.3, 'e'));
+      particles.push(new Particle(x, cy-70+gauss()*35,  bv+v1x*.3, v1y*.3, 'e'));
+      particles.push(new Particle(x, cy+70+gauss()*35, -bv+v2x*.3, v2y*.3, 'e'));
     }
-    for (let i = 0; i < 28; i++) {
-      particles.push(mkParticle(Math.random()*W, Math.random()*H, 'H'));
-    }
+    for (let i = 0; i < 28; i++) particles.push(mkParticle(Math.random()*W, Math.random()*H, 'H'));
 
   } else if (name === 'hot') {
     const pool = ['H','H','D','D','T','He','e','e','e','e'];
@@ -557,13 +635,10 @@ function loadPreset(name) {
 
   } else if (name === 'ring') {
     setGeo('ring');
-    const Ri = Math.min(W,H) * RING_INNER_FRAC;
-    const Ro = Math.min(W,H) * RING_OUTER_FRAC;
-    const Rm = (Ri + Ro) / 2;
-    const n  = 72;
-    const spd = 2.8;
-    for (let i = 0; i < n; i++) {
-      const angle = (2*Math.PI*i)/n + (Math.random()-.5)*0.08;
+    const Ri = Math.min(W,H) * RING_INNER_FRAC, Ro = Math.min(W,H) * RING_OUTER_FRAC;
+    const Rm = (Ri + Ro) / 2, spd = 2.8;
+    for (let i = 0; i < 72; i++) {
+      const angle = (2*Math.PI*i)/72 + (Math.random()-.5)*0.08;
       const r = Rm + (Math.random()-.5)*(Ro-Ri)*0.55;
       const x = cx + r*Math.cos(angle), y = cy + r*Math.sin(angle);
       const vx0 = -spd*Math.sin(angle) + gauss()*0.4;
@@ -573,54 +648,109 @@ function loadPreset(name) {
     }
     temperature = 2;
     syncSlider('sl-temp', 'v-temp', v => `T = ${v.toFixed(1)}`, temperature);
+
+  } else if (name === 'circuit') {
+    setGeo('circuit');
+    const S = Math.min(W, H);
+    const spd = 3.0;
+    for (let i = 0; i < 80; i++) {
+      const theta = (2*Math.PI*i)/80;
+      // Skip injection and exhaust port angles for initial fill
+      if (atInjPort(theta) || atExhPort(theta)) continue;
+      const Ro = getRo(theta, W, H), Ri = getRi(theta, W, H);
+      const r = Ri + 4 + Math.random() * (Ro - Ri - 8);
+      const x = cx + r*Math.cos(theta), y = cy + r*Math.sin(theta);
+      // CCW tangential velocity
+      const vx0 = -spd*Math.sin(theta) + gauss()*0.5;
+      const vy0 =  spd*Math.cos(theta) + gauss()*0.5;
+      const types = ['D','D','T','T','He3','e','e'];
+      const type  = types[i % types.length];
+      particles.push(new Particle(x, y, vx0, vy0, type));
+    }
+    temperature = 3;
+    syncSlider('sl-temp', 'v-temp', v => `T = ${v.toFixed(1)}`, temperature);
   }
 
   saveInitial();
 }
 
 // ─── Particle injection ───────────────────────────────────
-// Injects charge-neutral ion+electron pairs. Works for any geometry/preset.
 function injectParticles(count = 1) {
   const W = canvas.width, H = canvas.height;
   const cx = W/2, cy = H/2;
-  const Ri = Math.min(W,H) * RING_INNER_FRAC;
-  const Ro = Math.min(W,H) * RING_OUTER_FRAC;
 
   for (let n = 0; n < count; n++) {
-    let x, y;
-    if (geometry === 'ring') {
+    let x, y, vx0, vy0;
+    let injKE = 0;
+
+    if (geometry === 'circuit') {
+      // Spawn on ramp outside injection port, heading into circuit
+      const theta = INJ_THETA + (Math.random() - 0.5) * PORT_WIDTH * 1.4;
+      const Ro    = getRo(theta, W, H);
+      const rampLen = RAMP_FRAC * Math.min(W, H);
+      const r = Ro + rampLen * (0.2 + Math.random() * 0.7);
+      x = cx + r * Math.cos(theta);
+      y = cy + r * Math.sin(theta);
+      // Velocity: mostly inward + CCW tangential component
+      const spd = 2.8 + Math.random();
+      const tangAngle = theta + Math.PI/2;
+      vx0 = spd * (-0.5*Math.cos(theta) + 0.85*Math.cos(tangAngle)) + gauss()*0.3;
+      vy0 = spd * (-0.5*Math.sin(theta) + 0.85*Math.sin(tangAngle)) + gauss()*0.3;
+    } else if (geometry === 'ring') {
+      const Ri = Math.min(W,H)*RING_INNER_FRAC, Ro = Math.min(W,H)*RING_OUTER_FRAC;
       const angle = Math.random() * 2*Math.PI;
       const r = Ri + Math.random() * (Ro - Ri);
       x = cx + r*Math.cos(angle); y = cy + r*Math.sin(angle);
+      const { vx, vy } = thermalV('H');
+      vx0 = vx; vy0 = vy;
     } else {
       x = Math.random() * W; y = Math.random() * H;
+      const { vx, vy } = thermalV('H');
+      vx0 = vx; vy0 = vy;
     }
 
     let ionType;
-    if      (activePreset === 'neutral') ionType = 'H';
-    else if (activePreset === 'dt')      ionType = Math.random() < 0.5 ? 'D' : 'T';
+    if      (activePreset === 'neutral')  ionType = 'H';
+    else if (activePreset === 'dt')       ionType = Math.random() < 0.5 ? 'D' : 'T';
     else if (activePreset === 'hot' || activePreset === 'ring') {
-      const ionPool = ['H', 'D', 'T', 'He'];
-      ionType = ionPool[Math.floor(Math.random() * ionPool.length)];
+      ionType = ['H','D','T','He'][Math.floor(Math.random()*4)];
+    } else if (activePreset === 'circuit') {
+      ionType = circuitFuelType();
     } else {
       ionType = addMode === 'e' ? 'H' : addMode;
     }
 
-    particles.push(mkParticle(x, y, ionType));
-    particles.push(mkParticle(x + gauss()*15, y + gauss()*15, 'e'));
+    const ion = new Particle(x, y, vx0, vy0, ionType);
+    const elec = new Particle(x + gauss()*15, y + gauss()*15,
+      vx0 + gauss()*0.5, vy0 + gauss()*0.5, 'e');
+    injKE = 0.5*ion.mass*(vx0*vx0+vy0*vy0) + 0.5*elec.mass*(elec.vx*elec.vx+elec.vy*elec.vy);
+    particles.push(ion, elec);
+
+    if (geometry === 'circuit') {
+      if (eInHistory.length > 0) eInHistory[eInHistory.length - 1] += injKE;
+    }
   }
 }
 
 // ─── Physics ──────────────────────────────────────────────
 function step() {
   const W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2;
   const n = particles.length;
   if (n === 0) return;
+
+  // Update pinch oscillation
+  if (pinchRate_c > 0) {
+    pinchPhase_c += pinchRate_c;
+    pinchAmp_c = pinchMaxAmp * 0.5 * (1 + Math.sin(pinchPhase_c));
+  } else {
+    pinchAmp_c = pinchMaxAmp;
+  }
 
   const fx = new Float64Array(n);
   const fy = new Float64Array(n);
 
-  // Pairwise Coulomb: F_on_i = k*qi*qj/r³ * (ri − rj)
+  // Pairwise Coulomb
   for (let i = 0; i < n - 1; i++) {
     for (let j = i + 1; j < n; j++) {
       let dx = particles[j].x - particles[i].x;
@@ -634,10 +764,33 @@ function step() {
     }
   }
 
-  // Integrate
+  // Pinch compressive force — inward radial push near θ=0 in circuit mode
+  let pinchWorkThisFrame = 0;
+  if (geometry === 'circuit' && pinchAmp_c > 0) {
+    const S = Math.min(W, H);
+    const pinchStrength = pinchAmp_c * S * 0.012;
+    for (let i = 0; i < n; i++) {
+      const p = particles[i];
+      const rdx = p.x - cx, rdy = p.y - cy;
+      const r = Math.sqrt(rdx*rdx + rdy*rdy);
+      if (r < 1) continue;
+      const theta = Math.atan2(rdy, rdx);
+      const td = angDiff(theta, 0);
+      if (td > 1.2) continue;
+      const strength = pinchStrength * p.charge * Math.exp(-td*td / PINCH_SIG2);
+      const nx = rdx/r, ny = rdy/r;
+      const fpx = -strength * nx, fpy = -strength * ny;
+      fx[i] += fpx; fy[i] += fpy;
+      pinchWorkThisFrame += (fpx * p.vx + fpy * p.vy) * DT;
+    }
+  }
+
+  // Integrate & boundary
+  const toRemove = new Set();
+  let exhKEThisFrame = 0;
+
   for (let i = 0; i < n; i++) {
     const p = particles[i];
-    // Lorentz: F = q(v × B), B along z → Fx=qvyB, Fy=−qvxB
     const localB = getLocalB(p.x, p.y);
     const fmx = p.charge * p.vy * localB;
     const fmy = -p.charge * p.vx * localB;
@@ -647,14 +800,12 @@ function step() {
     p.vx = (p.vx + ax * DT) * damping;
     p.vy = (p.vy + ay * DT) * damping;
 
-    // Speed cap
     const spd2 = p.vx*p.vx + p.vy*p.vy;
     if (spd2 > MAX_SPD*MAX_SPD) {
       const s = MAX_SPD / Math.sqrt(spd2);
       p.vx *= s; p.vy *= s;
     }
 
-    // Trail (before position update so it lags nicely)
     p.trail.push({ x: p.x, y: p.y });
     if (p.trail.length > TRAIL_MAX) p.trail.shift();
 
@@ -664,10 +815,9 @@ function step() {
     if (geometry === 'torus') {
       if (p.x < 0) p.x += W;  if (p.x > W) p.x -= W;
       if (p.y < 0) p.y += H;  if (p.y > H) p.y -= H;
+
     } else if (geometry === 'ring') {
-      const cx = W/2, cy = H/2;
-      const Ri = Math.min(W,H) * RING_INNER_FRAC;
-      const Ro = Math.min(W,H) * RING_OUTER_FRAC;
+      const Ri = Math.min(W,H)*RING_INNER_FRAC, Ro = Math.min(W,H)*RING_OUTER_FRAC;
       const rdx = p.x - cx, rdy = p.y - cy;
       const r   = Math.sqrt(rdx*rdx + rdy*rdy);
       if (r < 1e-6) {
@@ -675,17 +825,47 @@ function step() {
       } else {
         const nx = rdx/r, ny = rdy/r;
         if (r < Ri) {
-          p.x = cx + nx * (Ri + 1); p.y = cy + ny * (Ri + 1);
+          p.x = cx + nx*(Ri+1); p.y = cy + ny*(Ri+1);
           const vr = p.vx*nx + p.vy*ny;
           if (vr < 0) { p.vx -= 2*vr*nx; p.vy -= 2*vr*ny; }
         } else if (r > Ro) {
-          p.x = cx + nx * (Ro - 1); p.y = cy + ny * (Ro - 1);
+          p.x = cx + nx*(Ro-1); p.y = cy + ny*(Ro-1);
           const vr = p.vx*nx + p.vy*ny;
           if (vr > 0) { p.vx -= 2*vr*nx; p.vy -= 2*vr*ny; }
         }
       }
+
+    } else if (geometry === 'circuit') {
+      const rdx = p.x - cx, rdy = p.y - cy;
+      const r   = Math.sqrt(rdx*rdx + rdy*rdy);
+      if (r < 1e-6) { p.x = cx + 10; p.y = cy; continue; }
+      const theta = Math.atan2(rdy, rdx);
+      const nx = rdx/r, ny = rdy/r;
+      const Ro = getRo(theta, W, H);
+      const Ri = getRi(theta, W, H);
+
+      if (r > Ro) {
+        if (atExhPort(theta)) {
+          // Particle exits through exhaust ramp — remove it
+          exhKEThisFrame += 0.5 * p.mass * (p.vx*p.vx + p.vy*p.vy);
+          toRemove.add(i);
+        } else if (atInjPort(theta)) {
+          // Let injected particles pass through — push them gently inward
+          p.x = cx + nx * (Ro - 2); p.y = cy + ny * (Ro - 2);
+        } else {
+          // Outer wall reflection
+          p.x = cx + nx * (Ro - 1); p.y = cy + ny * (Ro - 1);
+          const vr = p.vx*nx + p.vy*ny;
+          if (vr > 0) { p.vx -= 2*vr*nx; p.vy -= 2*vr*ny; }
+        }
+      } else if (r < Ri) {
+        // Inner wall reflection always
+        p.x = cx + nx * (Ri + 1); p.y = cy + ny * (Ri + 1);
+        const vr = p.vx*nx + p.vy*ny;
+        if (vr < 0) { p.vx -= 2*vr*nx; p.vy -= 2*vr*ny; }
+      }
+
     } else {
-      // Elastic reflection (box)
       if (p.x < 0)  { p.x = -p.x;      p.vx =  Math.abs(p.vx); }
       if (p.x > W)  { p.x = 2*W - p.x; p.vx = -Math.abs(p.vx); }
       if (p.y < 0)  { p.y = -p.y;      p.vy =  Math.abs(p.vy); }
@@ -693,7 +873,12 @@ function step() {
     }
   }
 
-  // Traveling-wave coil pulse: B_i = A·sin(2π·i/N - phase)
+  // Remove exhausted particles (circuit exhaust port)
+  if (toRemove.size > 0) {
+    [...toRemove].sort((a, b) => b - a).forEach(i => particles.splice(i, 1));
+  }
+
+  // Traveling-wave coil pulse
   if (pulseSpeed !== 0) {
     pulsePhase += pulseSpeed;
     for (let i = 0; i < N_COILS; i++) {
@@ -704,102 +889,97 @@ function step() {
   }
 
   checkFusion();
-
   frameCount++;
 
-  // Injection (up to cap)
+  // Standard injection
   if (injectEvery > 0 && particles.length < INJECT_CAP && frameCount % injectEvery === 0) {
     injectParticles(rateToCount(injectRate));
   }
 
-  // Exhaust (always, when enabled) — removes 1 ion + 1 electron (charge-neutral).
-  // Preferentially removes ⁴He ions; falls back to a random ion.
-  if (exhaustEvery > 0 && frameCount % exhaustEvery === 0) {
-    const heIdx   = particles.reduce((acc, p, i) => { if (p.type === 'He') acc.push(i); return acc; }, []);
-    const ionIdx  = particles.reduce((acc, p, i) => { if (p.charge > 0)   acc.push(i); return acc; }, []);
-    const elecIdx = particles.reduce((acc, p, i) => { if (p.charge < 0)   acc.push(i); return acc; }, []);
+  // Standard exhaust (non-circuit)
+  if (geometry !== 'circuit' && exhaustEvery > 0 && frameCount % exhaustEvery === 0) {
+    const heIdx   = particles.reduce((a,p,i) => { if (p.type==='He') a.push(i); return a; }, []);
+    const ionIdx  = particles.reduce((a,p,i) => { if (p.charge>0)   a.push(i); return a; }, []);
+    const elecIdx = particles.reduce((a,p,i) => { if (p.charge<0)   a.push(i); return a; }, []);
     if (ionIdx.length > 0 && elecIdx.length > 0) {
-      const rmIon  = heIdx.length > 0
-        ? heIdx[Math.floor(Math.random() * heIdx.length)]
-        : ionIdx[Math.floor(Math.random() * ionIdx.length)];
-      const rmElec = elecIdx[Math.floor(Math.random() * elecIdx.length)];
-      // Remove higher index first so the lower index stays valid
+      const rmIon  = heIdx.length > 0 ? heIdx[Math.floor(Math.random()*heIdx.length)]
+                                       : ionIdx[Math.floor(Math.random()*ionIdx.length)];
+      const rmElec = elecIdx[Math.floor(Math.random()*elecIdx.length)];
       const [hi, lo] = rmIon > rmElec ? [rmIon, rmElec] : [rmElec, rmIon];
-      particles.splice(hi, 1);
-      particles.splice(lo, 1);
+      particles.splice(hi, 1); particles.splice(lo, 1);
     }
   }
 
-  // Decay flashes
+  // Energy history (circuit only)
+  if (geometry === 'circuit') {
+    let totalKE = 0;
+    for (const p of particles) totalKE += 0.5 * p.mass * (p.vx*p.vx + p.vy*p.vy);
+    keHistory.push(totalKE);
+    eInHistory.push(Math.max(0, pinchWorkThisFrame));
+    eOutHistory.push(exhKEThisFrame);
+    if (keHistory.length   > KE_HIST_LEN) keHistory.shift();
+    if (eInHistory.length  > KE_HIST_LEN) eInHistory.shift();
+    if (eOutHistory.length > KE_HIST_LEN) eOutHistory.shift();
+  }
+
   for (const f of flashes) { f.r += 2.8; f.alpha -= 0.022; }
   flashes = flashes.filter(f => f.alpha > 0);
 }
 
 function checkFusion() {
   const W = canvas.width, H = canvas.height;
-  const remove = new Set();
-  const add    = [];
+  const remove = new Set(), add = [];
 
   for (let i = 0; i < particles.length - 1; i++) {
     if (remove.has(i)) continue;
     const pi = particles[i];
     if (pi.charge <= 0) continue;
-
     for (let j = i + 1; j < particles.length; j++) {
       if (remove.has(j)) continue;
       const pj = particles[j];
       if (pj.charge <= 0) continue;
-
       const key = [pi.type, pj.type].sort().join('+');
       const rxn = REACTIONS[key];
       if (!rxn) continue;
-
       let dx = pi.x - pj.x, dy = pi.y - pj.y;
       if (geometry === 'torus') { dx = minImg(dx, W); dy = minImg(dy, H); }
       if (dx*dx + dy*dy > FUSION_R*FUSION_R) continue;
       if (Math.random() > FUSION_PROB)        continue;
 
-      const mx  = (pi.x + pj.x) / 2, my = (pi.y + pj.y) / 2;
-      const M   = pi.mass + pj.mass;
-      const cmx = (pi.mass*pi.vx + pj.mass*pj.vx) / M;
-      const cmy = (pi.mass*pi.vy + pj.mass*pj.vy) / M;
-      const ang = Math.random() * 2 * Math.PI;
+      const mx = (pi.x+pj.x)/2, my = (pi.y+pj.y)/2;
+      const M  = pi.mass + pj.mass;
+      const cmx = (pi.mass*pi.vx + pj.mass*pj.vx)/M;
+      const cmy = (pi.mass*pi.vy + pj.mass*pj.vy)/M;
+      const ang = Math.random() * 2*Math.PI;
 
       if (rxn.triple) {
-        // p+¹¹B → 3⁴He: three alpha particles emitted isotropically
         for (let a = 0; a < 3; a++) {
-          const a2 = Math.random() * 2*Math.PI;
-          add.push(new Particle(mx + gauss()*3, my + gauss()*3,
-            cmx + rxn.kick * Math.cos(a2), cmy + rxn.kick * Math.sin(a2), rxn.product));
+          const a2 = Math.random()*2*Math.PI;
+          add.push(new Particle(mx+gauss()*3, my+gauss()*3,
+            cmx+rxn.kick*Math.cos(a2), cmy+rxn.kick*Math.sin(a2), rxn.product));
         }
       } else {
         add.push(new Particle(mx, my,
-          cmx + rxn.kick * Math.cos(ang), cmy + rxn.kick * Math.sin(ang), rxn.product));
+          cmx+rxn.kick*Math.cos(ang), cmy+rxn.kick*Math.sin(ang), rxn.product));
         if (rxn.byproduct) {
-          // one proton byproduct in opposite direction
           add.push(new Particle(mx, my,
-            cmx - rxn.kick * 0.5 * Math.cos(ang),
-            cmy - rxn.kick * 0.5 * Math.sin(ang), rxn.byproduct));
+            cmx-rxn.kick*0.5*Math.cos(ang), cmy-rxn.kick*0.5*Math.sin(ang), rxn.byproduct));
         }
         if (rxn.byproduct2) {
-          // two proton byproducts (³He+³He → ⁴He + 2p)
           for (let a = 0; a < 2; a++) {
-            const a2 = ang + Math.PI * (0.6 + a * 0.8);
-            add.push(new Particle(mx + gauss()*3, my + gauss()*3,
-              cmx + rxn.kick * 0.4 * Math.cos(a2),
-              cmy + rxn.kick * 0.4 * Math.sin(a2), rxn.byproduct2));
+            const a2 = ang + Math.PI*(0.6 + a*0.8);
+            add.push(new Particle(mx+gauss()*3, my+gauss()*3,
+              cmx+rxn.kick*0.4*Math.cos(a2), cmy+rxn.kick*0.4*Math.sin(a2), rxn.byproduct2));
           }
         }
       }
-
       remove.add(i); remove.add(j);
-      flashes.push({ x: mx, y: my, r: 0, alpha: 1.0, name: rxn.name, neutronic: !!rxn.neutronic });
+      flashes.push({ x:mx, y:my, r:0, alpha:1.0, name:rxn.name, neutronic:!!rxn.neutronic });
       fusionCount++;
       break;
     }
   }
-
-  [...remove].sort((a, b) => b - a).forEach(i => particles.splice(i, 1));
+  [...remove].sort((a,b) => b-a).forEach(i => particles.splice(i,1));
   particles.push(...add);
 }
 
@@ -812,18 +992,14 @@ function glowColor(sp, alpha) {
 function drawParticle(p, alpha = 1, scale = 1) {
   const sp = SPECIES[p.type];
   const px = p.x, py = p.y, pr = sp.r * scale;
-
-  // Glow halo
-  const grd = ctx.createRadialGradient(px, py, 0, px, py, pr * 4);
-  grd.addColorStop(0, glowColor(sp, 0.38 * alpha));
+  const grd = ctx.createRadialGradient(px, py, 0, px, py, pr*4);
+  grd.addColorStop(0, glowColor(sp, 0.38*alpha));
   grd.addColorStop(1, glowColor(sp, 0));
-  ctx.beginPath(); ctx.arc(px, py, pr * 4, 0, Math.PI*2);
+  ctx.beginPath(); ctx.arc(px, py, pr*4, 0, Math.PI*2);
   ctx.fillStyle = grd; ctx.fill();
-
-  // Core
   ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI*2);
   ctx.fillStyle = alpha < 1
-    ? SPECIES[p.type].color + Math.round(alpha * 255).toString(16).padStart(2,'0')
+    ? SPECIES[p.type].color + Math.round(alpha*255).toString(16).padStart(2,'0')
     : SPECIES[p.type].color;
   ctx.fill();
 }
@@ -838,12 +1014,10 @@ function drawTrail(p) {
     const pt = p.trail[i];
     if (i > 0) {
       const prev = p.trail[i-1];
-      if (Math.abs(pt.x - prev.x) > W*.4 || Math.abs(pt.y - prev.y) > H*.4) {
-        started = false;
-      }
+      if (Math.abs(pt.x-prev.x) > W*.4 || Math.abs(pt.y-prev.y) > H*.4) started = false;
     }
     if (!started) { ctx.moveTo(pt.x, pt.y); started = true; }
-    else           { ctx.lineTo(pt.x, pt.y); }
+    else ctx.lineTo(pt.x, pt.y);
   }
   ctx.strokeStyle = glowColor(sp, 0.18);
   ctx.lineWidth = 1;
@@ -853,94 +1027,254 @@ function drawTrail(p) {
 function drawGhosts(p) {
   const W = canvas.width, H = canvas.height;
   const offsets = [];
-  if (p.x < GHOST_DIST)        offsets.push([ W,  0]);
-  if (p.x > W - GHOST_DIST)    offsets.push([-W,  0]);
-  if (p.y < GHOST_DIST)        offsets.push([ 0,  H]);
-  if (p.y > H - GHOST_DIST)    offsets.push([ 0, -H]);
-  if (p.x < GHOST_DIST  && p.y < GHOST_DIST)       offsets.push([ W,  H]);
-  if (p.x > W-GHOST_DIST && p.y < GHOST_DIST)      offsets.push([-W,  H]);
-  if (p.x < GHOST_DIST  && p.y > H-GHOST_DIST)     offsets.push([ W, -H]);
-  if (p.x > W-GHOST_DIST && p.y > H-GHOST_DIST)    offsets.push([-W, -H]);
-
+  if (p.x < GHOST_DIST)       offsets.push([W, 0]);
+  if (p.x > W-GHOST_DIST)     offsets.push([-W,0]);
+  if (p.y < GHOST_DIST)       offsets.push([0, H]);
+  if (p.y > H-GHOST_DIST)     offsets.push([0,-H]);
+  if (p.x<GHOST_DIST  && p.y<GHOST_DIST)      offsets.push([W, H]);
+  if (p.x>W-GHOST_DIST&& p.y<GHOST_DIST)      offsets.push([-W,H]);
+  if (p.x<GHOST_DIST  && p.y>H-GHOST_DIST)    offsets.push([W,-H]);
+  if (p.x>W-GHOST_DIST&& p.y>H-GHOST_DIST)    offsets.push([-W,-H]);
   for (const [ox, oy] of offsets) {
-    const ghost = { x: p.x + ox, y: p.y + oy, type: p.type, trail: [] };
+    const ghost = { x: p.x+ox, y: p.y+oy, type: p.type, trail: [] };
     drawParticle(ghost, 0.28, 0.8);
   }
+}
+
+// Draw a beamline ramp extending radially outward from a port
+function drawRamp(cx, cy, theta, rampLen, halfW, color, label) {
+  const ox = Math.cos(theta), oy = Math.sin(theta);  // outward radial
+  const tx = -oy, ty = ox;                            // tangential
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([4, 3]);
+  // Two ramp walls
+  for (const side of [-1, 1]) {
+    const bx = cx + side*halfW*tx, by = cy + side*halfW*ty;
+    const ex = bx + rampLen*ox,    ey = by + rampLen*oy;
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex, ey); ctx.stroke();
+  }
+  // End cap
+  const end1x = cx + halfW*tx + rampLen*ox, end1y = cy + halfW*ty + rampLen*oy;
+  const end2x = cx - halfW*tx + rampLen*ox, end2y = cy - halfW*ty + rampLen*oy;
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(end1x, end1y); ctx.lineTo(end2x, end2y); ctx.stroke();
+  // Label
+  const lx = cx + (rampLen*0.6)*ox + 12*tx, ly = cy + (rampLen*0.6)*oy + 12*ty;
+  ctx.fillStyle = color;
+  ctx.font = 'bold 9px Segoe UI, system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, lx, ly);
+  ctx.restore();
+}
+
+function drawCircuit(W, H) {
+  const cx = W/2, cy = H/2;
+  const S  = Math.min(W, H);
+  const Ao = CIRC_AX*S, Bo = CIRC_AY*S;
+  const rampLen = RAMP_FRAC * S;
+
+  // Darken outside the outer ellipse
+  ctx.save();
+  ctx.fillStyle = 'rgba(8,8,24,0.60)';
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.ellipse(cx, cy, Ao, Bo, 0, 0, Math.PI*2, true);
+  ctx.fill('evenodd');
+
+  // Darken inner ellipse (base, no pinch for visual simplicity)
+  const ai = CIRC_ax*S, bi = CIRC_ay*S;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, ai, bi, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  // Outer wall (open at ports)
+  ctx.strokeStyle = '#2a3a6a';
+  ctx.lineWidth = 1.5;
+  const portGap = PORT_WIDTH * 1.1;
+  for (const portCenter of [INJ_THETA, EXH_THETA]) {
+    const start = portCenter + portGap, end = portCenter + 2*Math.PI - portGap;
+    ctx.beginPath();
+    // Draw arc avoiding port gap — use parametric since it's an ellipse
+    const steps = 120;
+    let drawing = false;
+    for (let s = 0; s <= steps; s++) {
+      const a = start + (end - start) * s / steps;
+      const ad = angDiff(a, portCenter);
+      if (ad < portGap) { drawing = false; continue; }
+      const px2 = cx + Ao*Math.cos(a), py2 = cy + Bo*Math.sin(a);
+      if (!drawing) { ctx.moveTo(px2, py2); drawing = true; }
+      else ctx.lineTo(px2, py2);
+    }
+    ctx.stroke();
+  }
+
+  // Inner wall (with live pinch shape)
+  ctx.strokeStyle = '#2a3a6a';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  const STEPS = 180;
+  for (let s = 0; s <= STEPS; s++) {
+    const a  = (2*Math.PI*s) / STEPS;
+    const ri = getRi(a, W, H);
+    const px2 = cx + ri*Math.cos(a), py2 = cy + ri*Math.sin(a);
+    if (s === 0) ctx.moveTo(px2, py2); else ctx.lineTo(px2, py2);
+  }
+  ctx.closePath(); ctx.stroke();
+
+  // Pinch zone glow when active
+  if (pinchAmp_c > 0.002) {
+    const pinchX = cx + getRo(0, W, H) * 0.5;
+    const t = Math.min(1, pinchAmp_c / 0.1);
+    const pgrd = ctx.createRadialGradient(pinchX, cy, 0, pinchX, cy, S*0.12);
+    pgrd.addColorStop(0,   `rgba(255,100,255,${0.15*t})`);
+    pgrd.addColorStop(0.5, `rgba(150, 50,255,${0.08*t})`);
+    pgrd.addColorStop(1,   `rgba(80,  30,180,0)`);
+    ctx.beginPath(); ctx.arc(pinchX, cy, S*0.12, 0, Math.PI*2);
+    ctx.fillStyle = pgrd; ctx.fill();
+  }
+
+  // Ramps
+  const injPortX = cx + getRo(INJ_THETA, W, H) * Math.cos(INJ_THETA);
+  const injPortY = cy + getRo(INJ_THETA, W, H) * Math.sin(INJ_THETA);
+  drawRamp(injPortX, injPortY, INJ_THETA, rampLen, S*0.045, '#44aaff88', 'INJ');
+
+  const exhPortX = cx + getRo(EXH_THETA, W, H) * Math.cos(EXH_THETA);
+  const exhPortY = cy + getRo(EXH_THETA, W, H) * Math.sin(EXH_THETA);
+  drawRamp(exhPortX, exhPortY, EXH_THETA, rampLen, S*0.045, '#ff664488', 'EXH');
+
+  // Port opening highlights
+  ctx.lineWidth = 2;
+  for (const [pt, col] of [[INJ_THETA, '#44aaffaa'], [EXH_THETA, '#ff6644aa']]) {
+    const ramp_hw = S * 0.045;
+    const tx = -Math.sin(pt), ty = Math.cos(pt);
+    const px2 = cx + getRo(pt,W,H)*Math.cos(pt), py2 = cy + getRo(pt,W,H)*Math.sin(pt);
+    ctx.strokeStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(px2 + ramp_hw*tx, py2 + ramp_hw*ty);
+    ctx.lineTo(px2 - ramp_hw*tx, py2 - ramp_hw*ty);
+    ctx.stroke();
+  }
+}
+
+// Energy graph overlay (bottom-left of canvas, circuit mode only)
+function drawEnergyGraph(W, H) {
+  if (keHistory.length < 4) return;
+  const gx = 14, gy = H - 100, gw = 210, gh = 80;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(4,4,16,0.75)';
+  ctx.strokeStyle = '#1a1a3a';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(gx, gy, gw, gh, 4);
+  ctx.fill(); ctx.stroke();
+
+  // Labels
+  ctx.fillStyle = '#556688';
+  ctx.font = '8px Segoe UI, system-ui';
+  ctx.textAlign = 'left';
+  ctx.fillText('ENERGY — KE (white)  in (green)  out (red)', gx+4, gy+8);
+
+  const len = keHistory.length;
+  const maxKE = Math.max(...keHistory, 1);
+  const maxIn  = Math.max(...eInHistory, 0.001);
+  const maxOut = Math.max(...eOutHistory, 0.001);
+  const maxRate = Math.max(maxIn, maxOut);
+  const plotH = gh - 16, plotY = gy + gh - 4;
+
+  // KE line (white)
+  ctx.beginPath();
+  for (let i = 0; i < len; i++) {
+    const px2 = gx + 2 + (i / (KE_HIST_LEN - 1)) * (gw - 4);
+    const py2 = plotY - (keHistory[i] / maxKE) * plotH;
+    if (i === 0) ctx.moveTo(px2, py2); else ctx.lineTo(px2, py2);
+  }
+  ctx.strokeStyle = 'rgba(200,210,240,0.7)'; ctx.lineWidth = 1; ctx.stroke();
+
+  // Energy-in fill (green)
+  ctx.beginPath();
+  ctx.moveTo(gx+2, plotY);
+  for (let i = 0; i < len; i++) {
+    const px2 = gx + 2 + (i / (KE_HIST_LEN-1)) * (gw-4);
+    const py2 = plotY - Math.min(1, eInHistory[i]/maxRate) * plotH * 0.8;
+    ctx.lineTo(px2, py2);
+  }
+  ctx.lineTo(gx + 2 + ((len-1)/(KE_HIST_LEN-1))*(gw-4), plotY);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(60,220,100,0.25)'; ctx.fill();
+
+  // Energy-out fill (red)
+  ctx.beginPath();
+  ctx.moveTo(gx+2, plotY);
+  for (let i = 0; i < len; i++) {
+    const px2 = gx + 2 + (i / (KE_HIST_LEN-1)) * (gw-4);
+    const py2 = plotY - Math.min(1, eOutHistory[i]/maxRate) * plotH * 0.8;
+    ctx.lineTo(px2, py2);
+  }
+  ctx.lineTo(gx + 2 + ((len-1)/(KE_HIST_LEN-1))*(gw-4), plotY);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(220,80,60,0.25)'; ctx.fill();
+
+  ctx.restore();
 }
 
 function draw() {
   const W = canvas.width, H = canvas.height;
 
-  // Motion-blur fade
   ctx.fillStyle = 'rgba(8,8,24,0.30)';
   ctx.fillRect(0, 0, W, H);
 
-  // Box boundary
   if (geometry === 'box') {
-    ctx.strokeStyle = '#2a2a5a';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#2a2a5a'; ctx.lineWidth = 1;
     ctx.strokeRect(1, 1, W-2, H-2);
   }
 
-  // Ring geometry: darken forbidden zones, draw walls
   if (geometry === 'ring') {
     const cx = W/2, cy = H/2;
-    const Ri = Math.min(W,H) * RING_INNER_FRAC;
-    const Ro = Math.min(W,H) * RING_OUTER_FRAC;
+    const Ri = Math.min(W,H)*RING_INNER_FRAC, Ro = Math.min(W,H)*RING_OUTER_FRAC;
     ctx.save();
     ctx.fillStyle = 'rgba(8,8,24,0.60)';
-    // Darken outside the outer wall
-    ctx.beginPath();
-    ctx.rect(0, 0, W, H);
-    ctx.arc(cx, cy, Ro, 0, Math.PI*2, true);
-    ctx.fill('evenodd');
-    // Darken inner plug
-    ctx.beginPath();
-    ctx.arc(cx, cy, Ri, 0, Math.PI*2);
-    ctx.fill();
+    ctx.beginPath(); ctx.rect(0,0,W,H);
+    ctx.arc(cx, cy, Ro, 0, Math.PI*2, true); ctx.fill('evenodd');
+    ctx.beginPath(); ctx.arc(cx, cy, Ri, 0, Math.PI*2); ctx.fill();
     ctx.restore();
-    // Wall outlines
-    ctx.strokeStyle = '#3a3a8a';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#3a3a8a'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(cx, cy, Ri, 0, Math.PI*2); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy, Ro, 0, Math.PI*2); ctx.stroke();
   }
 
-  // Torus ghosts (wrap-around visual)
+  if (geometry === 'circuit') drawCircuit(W, H);
+
   if (geometry === 'torus') {
     for (const p of particles) drawGhosts(p);
-    // Subtle edge vignette to hint at wrap
-    const edgeA = 'rgba(100,120,255,0.06)';
-    const edgeB = 'rgba(100,120,255,0)';
+    const edgeA = 'rgba(100,120,255,0.06)', edgeB = 'rgba(100,120,255,0)';
     for (const [x0,y0,x1,y1] of [[0,0,40,0],[W-40,0,W,0],[0,0,0,40],[0,H-40,0,H]]) {
       const gx = ctx.createLinearGradient(x0,y0,x1,y1);
       gx.addColorStop(0, edgeA); gx.addColorStop(1, edgeB);
-      ctx.fillStyle = gx; ctx.fillRect(Math.min(x0,x1), Math.min(y0,y1), Math.abs(x1-x0)||W, Math.abs(y1-y0)||H);
+      ctx.fillStyle = gx;
+      ctx.fillRect(Math.min(x0,x1), Math.min(y0,y1), Math.abs(x1-x0)||W, Math.abs(y1-y0)||H);
     }
   }
 
-  // Trails
   for (const p of particles) drawTrail(p);
-
-  // Particles
   for (const p of particles) drawParticle(p);
 
   // Coil indicators
   if (bCoils.some(b => Math.abs(b) > 0.01)) {
     const pos = coilPositions();
     ctx.save();
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
+    ctx.font = '11px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (let i = 0; i < N_COILS; i++) {
       if (Math.abs(bCoils[i]) < 0.01) continue;
       const { x, y } = pos[i];
-      const t = Math.min(1, Math.abs(bCoils[i]) / 3);
+      const t = Math.min(1, Math.abs(bCoils[i])/3);
       const [cr, cg, cb] = bCoils[i] > 0 ? [255,80,80] : [80,140,255];
-      ctx.beginPath(); ctx.arc(x, y, 8 + t*5, 0, Math.PI*2);
-      ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.15 + t*0.15})`;
-      ctx.fill();
-      ctx.strokeStyle = `rgba(${cr},${cg},${cb},${0.5 + t*0.3})`;
+      ctx.beginPath(); ctx.arc(x, y, 8+t*5, 0, Math.PI*2);
+      ctx.fillStyle   = `rgba(${cr},${cg},${cb},${0.15+t*0.15})`; ctx.fill();
+      ctx.strokeStyle = `rgba(${cr},${cg},${cb},${0.5+t*0.3})`;
       ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = `rgba(${cr},${cg},${cb},0.95)`;
       ctx.fillText(bCoils[i] > 0 ? '⊙' : '⊗', x, y);
@@ -949,42 +1283,41 @@ function draw() {
     ctx.restore();
   }
 
-  // Fusion flashes — aneutronic: orange/yellow; neutronic: green (neutron radiation)
+  // Fusion flashes
   for (const f of flashes) {
     if (f.r <= 0) continue;
     const grd = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r);
     if (f.neutronic) {
-      grd.addColorStop(0,   `rgba(200,255,200,${f.alpha * 0.95})`);
-      grd.addColorStop(0.25,`rgba( 80,255,120,${f.alpha * 0.6})`);
-      grd.addColorStop(0.6, `rgba(  0,160, 60,${f.alpha * 0.3})`);
+      grd.addColorStop(0,   `rgba(200,255,200,${f.alpha*0.95})`);
+      grd.addColorStop(0.25,`rgba( 80,255,120,${f.alpha*0.6})`);
+      grd.addColorStop(0.6, `rgba(  0,160, 60,${f.alpha*0.3})`);
       grd.addColorStop(1,   `rgba(  0, 60,  0,0)`);
     } else {
-      grd.addColorStop(0,   `rgba(255,255,220,${f.alpha * 0.95})`);
-      grd.addColorStop(0.25,`rgba(255,220, 60,${f.alpha * 0.6})`);
-      grd.addColorStop(0.6, `rgba(255, 80,  0,${f.alpha * 0.3})`);
+      grd.addColorStop(0,   `rgba(255,255,220,${f.alpha*0.95})`);
+      grd.addColorStop(0.25,`rgba(255,220, 60,${f.alpha*0.6})`);
+      grd.addColorStop(0.6, `rgba(255, 80,  0,${f.alpha*0.3})`);
       grd.addColorStop(1,   `rgba(255, 40,  0,0)`);
     }
     ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI*2);
     ctx.fillStyle = grd; ctx.fill();
-
     if (f.alpha > 0.6) {
       ctx.fillStyle = f.neutronic
         ? `rgba(160,255,160,${(f.alpha-0.6)*2.5})`
         : `rgba(255,240,150,${(f.alpha-0.6)*2.5})`;
       ctx.font = 'bold 11px Segoe UI, system-ui';
       ctx.textAlign = 'center';
-      ctx.fillText(f.name, f.x, f.y - f.r * 0.5 - 4);
+      ctx.fillText(f.name, f.x, f.y - f.r*0.5 - 4);
     }
   }
 
-  // ── Stats ─────────────────────────────────────────────
+  // Energy graph (circuit only)
+  if (geometry === 'circuit') drawEnergyGraph(W, H);
+
+  // Stats
   const counts = {};
   for (const id of Object.keys(SPECIES)) counts[id] = 0;
   let ke = 0;
-  for (const p of particles) {
-    counts[p.type]++;
-    ke += 0.5 * p.mass * (p.vx*p.vx + p.vy*p.vy);
-  }
+  for (const p of particles) { counts[p.type]++; ke += 0.5*p.mass*(p.vx*p.vx+p.vy*p.vy); }
   const avgKE = particles.length ? ke / particles.length : 0;
 
   let html = '';
@@ -997,14 +1330,12 @@ function draw() {
   document.getElementById('stats').innerHTML = html;
 }
 
-// ─── Loop ─────────────────────────────────────────────────
 function loop() {
   if (!paused) step();
   draw();
   requestAnimationFrame(loop);
 }
 
-// ─── Boot ─────────────────────────────────────────────────
 loadPreset('neutral');
 loop();
 </script>
