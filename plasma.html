@@ -912,7 +912,7 @@ function step() {
     let totalKE = 0;
     for (const p of particles) totalKE += 0.5 * p.mass * (p.vx*p.vx + p.vy*p.vy);
     keHistory.push(totalKE);
-    eInHistory.push(Math.max(0, pinchWorkThisFrame));
+    eInHistory.push(pinchWorkThisFrame);  // raw: positive = added, negative = removed
     eOutHistory.push(exhKEThisFrame);
     if (keHistory.length   > KE_HIST_LEN) keHistory.shift();
     if (eInHistory.length  > KE_HIST_LEN) eInHistory.shift();
@@ -1160,60 +1160,103 @@ function drawCircuit(W, H) {
 // Energy graph overlay (bottom-left of canvas, circuit mode only)
 function drawEnergyGraph(W, H) {
   if (keHistory.length < 4) return;
-  const gx = 14, gy = H - 100, gw = 210, gh = 80;
+  const gx = 10, gy = H - 148, gw = 265, gh = 132;
 
   ctx.save();
-  ctx.fillStyle = 'rgba(4,4,16,0.75)';
-  ctx.strokeStyle = '#1a1a3a';
+  ctx.fillStyle = 'rgba(4,4,18,0.84)';
+  ctx.strokeStyle = '#1e1e42';
   ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.roundRect(gx, gy, gw, gh, 4);
+  ctx.beginPath(); ctx.roundRect(gx, gy, gw, gh, 5);
   ctx.fill(); ctx.stroke();
 
-  // Labels
-  ctx.fillStyle = '#556688';
+  const len    = keHistory.length;
+  const maxKE  = Math.max(...keHistory, 1);
+  const curKE  = keHistory[len - 1];
+  const plotW  = gw - 8;
+  const x0     = gx + 4;
+
+  // ── Layout bands ──────────────────────────────────────────
+  const hdrH  = 16;
+  const keH   = Math.round((gh - hdrH) * 0.56);
+  const peH   = gh - hdrH - keH - 3;
+  const keTop = gy + hdrH;
+  const peTop = keTop + keH + 3;
+  const peMid = peTop + Math.round(peH / 2);
+
+  // ── Header labels ─────────────────────────────────────────
+  ctx.font = '9px Segoe UI, system-ui';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#7788aa';
+  ctx.fillText('KE', x0, gy + 11);
+  ctx.fillStyle = '#4a9';
+  ctx.fillText('pinch Δe', x0 + 28, gy + 11);
+
+  // Current KE value — prominent, right-aligned
+  ctx.font = 'bold 12px Segoe UI, system-ui';
+  ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(215,225,255,0.95)';
+  ctx.fillText(curKE.toFixed(1), gx + gw - 5, gy + 12);
+
+  // ── KE line (white) ───────────────────────────────────────
+  ctx.beginPath();
+  for (let i = 0; i < len; i++) {
+    const px = x0 + (i / (KE_HIST_LEN - 1)) * plotW;
+    const py = keTop + keH - (keHistory[i] / maxKE) * keH;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.strokeStyle = 'rgba(210,220,255,0.9)';
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
+
+  // ── Band separator ────────────────────────────────────────
+  ctx.strokeStyle = '#1e2040';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(gx + 2, peTop - 1); ctx.lineTo(gx + gw - 2, peTop - 1);
+  ctx.stroke();
+
+  // ── Pinch energy band ─────────────────────────────────────
+  const rawMax  = Math.max(...eInHistory.map(v => Math.abs(v)), 0.001);
+  const peScale = (peH * 0.46) / rawMax;
+
+  // Zero line (dashed)
+  ctx.strokeStyle = 'rgba(160,170,220,0.6)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(gx + 2, peMid); ctx.lineTo(gx + gw - 2, peMid);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // "0" label
   ctx.font = '8px Segoe UI, system-ui';
   ctx.textAlign = 'left';
-  ctx.fillText('ENERGY — KE (white)  in (green)  out (red)', gx+4, gy+8);
+  ctx.fillStyle = 'rgba(160,170,220,0.65)';
+  ctx.fillText('0', gx + 3, peMid - 2);
 
-  const len = keHistory.length;
-  const maxKE = Math.max(...keHistory, 1);
-  const maxIn  = Math.max(...eInHistory, 0.001);
-  const maxOut = Math.max(...eOutHistory, 0.001);
-  const maxRate = Math.max(maxIn, maxOut);
-  const plotH = gh - 16, plotY = gy + gh - 4;
-
-  // KE line (white)
+  // Green fill: positive pinch work (energy added, above zero)
   ctx.beginPath();
+  ctx.moveTo(x0, peMid);
   for (let i = 0; i < len; i++) {
-    const px2 = gx + 2 + (i / (KE_HIST_LEN - 1)) * (gw - 4);
-    const py2 = plotY - (keHistory[i] / maxKE) * plotH;
-    if (i === 0) ctx.moveTo(px2, py2); else ctx.lineTo(px2, py2);
+    const px = x0 + (i / (KE_HIST_LEN - 1)) * plotW;
+    ctx.lineTo(px, peMid - Math.max(0, eInHistory[i]) * peScale);
   }
-  ctx.strokeStyle = 'rgba(200,210,240,0.7)'; ctx.lineWidth = 1; ctx.stroke();
-
-  // Energy-in fill (green)
-  ctx.beginPath();
-  ctx.moveTo(gx+2, plotY);
-  for (let i = 0; i < len; i++) {
-    const px2 = gx + 2 + (i / (KE_HIST_LEN-1)) * (gw-4);
-    const py2 = plotY - Math.min(1, eInHistory[i]/maxRate) * plotH * 0.8;
-    ctx.lineTo(px2, py2);
-  }
-  ctx.lineTo(gx + 2 + ((len-1)/(KE_HIST_LEN-1))*(gw-4), plotY);
+  ctx.lineTo(x0 + ((len-1)/(KE_HIST_LEN-1)) * plotW, peMid);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(60,220,100,0.25)'; ctx.fill();
+  ctx.fillStyle = 'rgba(60,220,110,0.38)';
+  ctx.fill();
 
-  // Energy-out fill (red)
+  // Red fill: negative pinch work (energy removed, below zero)
   ctx.beginPath();
-  ctx.moveTo(gx+2, plotY);
+  ctx.moveTo(x0, peMid);
   for (let i = 0; i < len; i++) {
-    const px2 = gx + 2 + (i / (KE_HIST_LEN-1)) * (gw-4);
-    const py2 = plotY - Math.min(1, eOutHistory[i]/maxRate) * plotH * 0.8;
-    ctx.lineTo(px2, py2);
+    const px = x0 + (i / (KE_HIST_LEN - 1)) * plotW;
+    ctx.lineTo(px, peMid - Math.min(0, eInHistory[i]) * peScale);
   }
-  ctx.lineTo(gx + 2 + ((len-1)/(KE_HIST_LEN-1))*(gw-4), plotY);
+  ctx.lineTo(x0 + ((len-1)/(KE_HIST_LEN-1)) * plotW, peMid);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(220,80,60,0.25)'; ctx.fill();
+  ctx.fillStyle = 'rgba(225,80,60,0.38)';
+  ctx.fill();
 
   ctx.restore();
 }
