@@ -117,6 +117,18 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
     <div class="coil-grid" id="coil-grid"><!-- built by JS --></div>
   </div>
 
+  <!-- Pulse controls -->
+  <div>
+    <lbl>Pulse speed (traveling wave)</lbl>
+    <input type="range" id="sl-pulse-spd" min="-5" max="5" step="0.05" value="0">
+    <div class="val" id="v-pulse-spd">Off</div>
+  </div>
+  <div>
+    <lbl>Pulse amplitude</lbl>
+    <input type="range" id="sl-pulse-amp" min="0" max="3" step="0.05" value="1.5">
+    <div class="val" id="v-pulse-amp">1.50</div>
+  </div>
+
   <!-- Damping -->
   <div>
     <lbl>Damping</lbl>
@@ -263,8 +275,12 @@ function rateToEvery(r) { return r <= 0 ? 0 : Math.max(8, Math.round(80 / r)); }
 function rateToCount(r) { return r <= 0 ? 0 : Math.max(1, Math.round(r / 2)); }
 
 // ─── Coil array ───────────────────────────────────────────
-const N_COILS = 6;
-let bCoils = new Array(N_COILS).fill(0);
+const N_COILS  = 6;
+let bCoils     = new Array(N_COILS).fill(0);
+let pulseSpeed = 0;   // rad/frame of traveling wave (0 = off)
+let pulseAmp   = 1.5; // amplitude of traveling wave
+let pulsePhase = 0;   // current phase accumulator
+const coilEls  = [];  // {sl, cv} references for live UI updates
 
 function coilPositions() {
   const W = canvas.width, H = canvas.height;
@@ -349,6 +365,7 @@ function resetSim() {
   particles   = savedState.map(p => p.clone());
   flashes     = [];
   fusionCount = 0;
+  resetCoils();
 }
 
 function clearAll() {
@@ -437,8 +454,20 @@ wire('sl-exhaust','v-exhaust',v => v <= 0 ? 'Off' : v.toFixed(1), v => exhaustEv
     });
     cell.appendChild(lbl); cell.appendChild(sl); cell.appendChild(cv);
     grid.appendChild(cell);
+    coilEls.push({ sl, cv });
   }
 })();
+
+wire('sl-pulse-spd', 'v-pulse-spd', v => v === 0 ? 'Off' : v.toFixed(2), v => pulseSpeed = v * 0.03);
+wire('sl-pulse-amp', 'v-pulse-amp', v => v.toFixed(2),                    v => pulseAmp   = v);
+
+function resetCoils() {
+  bCoils.fill(0);
+  pulsePhase = 0;
+  syncSlider('sl-pulse-spd', 'v-pulse-spd', v => v === 0 ? 'Off' : v.toFixed(2), 0);
+  pulseSpeed = 0;
+  coilEls.forEach(({ sl, cv }) => { sl.value = 0; cv.textContent = '0.00'; });
+}
 
 // Sync slider display to JS value
 function syncSlider(id, valId, fmt, val) {
@@ -661,6 +690,16 @@ function step() {
       if (p.x > W)  { p.x = 2*W - p.x; p.vx = -Math.abs(p.vx); }
       if (p.y < 0)  { p.y = -p.y;      p.vy =  Math.abs(p.vy); }
       if (p.y > H)  { p.y = 2*H - p.y; p.vy = -Math.abs(p.vy); }
+    }
+  }
+
+  // Traveling-wave coil pulse: B_i = A·sin(2π·i/N - phase)
+  if (pulseSpeed !== 0) {
+    pulsePhase += pulseSpeed;
+    for (let i = 0; i < N_COILS; i++) {
+      bCoils[i] = pulseAmp * Math.sin(2*Math.PI*i/N_COILS - pulsePhase);
+      coilEls[i].sl.value = bCoils[i];
+      coilEls[i].cv.textContent = bCoils[i].toFixed(2);
     }
   }
 
