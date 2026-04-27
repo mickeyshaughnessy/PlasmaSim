@@ -131,7 +131,6 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
       <button class="btn geo-btn active" id="btn-torus"   onclick="setGeo('torus')">⭕ Torus</button>
       <button class="btn geo-btn"        id="btn-box"     onclick="setGeo('box')">⬜ Box</button>
       <button class="btn geo-btn"        id="btn-ring"    onclick="setGeo('ring')">◎ Ring</button>
-      <button class="btn geo-btn"        id="btn-circuit" onclick="setGeo('circuit')">⬭ Circuit</button>
     </div>
   </div>
 
@@ -180,7 +179,7 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
       <button class="btn" onclick="loadPreset('twostream')">Two-Stream</button>
       <button class="btn" onclick="loadPreset('hot')">Hot Mix</button>
       <button class="btn" onclick="loadPreset('ring')">◎ Ring Flow</button>
-      <button class="btn" onclick="loadPreset('circuit')">⬭ Circuit Flow</button>
+      <button class="btn" onclick="loadPreset('circuit')" style="opacity:0;cursor:default;" tabindex="-1"></button>
     </div>
   </div>
 
@@ -213,7 +212,6 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
     Click canvas to place particles.<br>
     <span style="color:#44ccff">²D</span>+<span style="color:#44ffaa">³T</span>→<span style="color:#ffee44">⁴He</span> neutronic (green flash)<br>
     <span style="color:#44ccff">²D</span>+<span style="color:#ff55cc">³He</span>→<span style="color:#ffee44">⁴He</span>+p aneutronic<br>
-    Circuit: injection ramp (left↑), exhaust (left↓), pinch (right).
   </div>
 </div>
 
@@ -476,10 +474,9 @@ canvas.addEventListener('click', e => {
 
 function setGeo(g) {
   geometry = g;
-  document.getElementById('btn-torus').classList.toggle('active',   g === 'torus');
-  document.getElementById('btn-box').classList.toggle('active',     g === 'box');
-  document.getElementById('btn-ring').classList.toggle('active',    g === 'ring');
-  document.getElementById('btn-circuit').classList.toggle('active', g === 'circuit');
+  document.getElementById('btn-torus').classList.toggle('active', g === 'torus');
+  document.getElementById('btn-box').classList.toggle('active',   g === 'box');
+  document.getElementById('btn-ring').classList.toggle('active',  g === 'ring');
 }
 
 function togglePause() {
