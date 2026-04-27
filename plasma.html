@@ -74,6 +74,12 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
 .act-row .btn { flex: 1; }
 /* Hint footer */
 .hint { font-size: 10px; color: #334; line-height: 1.6; margin-top: auto; padding-top: 6px; }
+/* Coil array */
+.coil-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 4px; }
+.coil-cell { text-align: center; }
+.coil-cell lbl { font-size: 9px; margin-bottom: 1px; }
+.coil-cell input[type=range] { height: 14px; }
+.coil-cell .cv { font-size: 9px; color: #556677; margin-top: 1px; }
 </style>
 </head>
 <body>
@@ -98,18 +104,17 @@ input[type=range] { width: 100%; accent-color: #4466cc; cursor: pointer; }
     <div class="val" id="v-temp">T = 2.0</div>
   </div>
 
-  <!-- B field -->
+  <!-- B field (background uniform) -->
   <div>
-    <lbl>Magnetic Field (B⊥)</lbl>
-    <input type="range" id="sl-b" min="-3" max="3" step="0.05" value="0">
+    <lbl>Background B field (B⊥)</lbl>
+    <input type="range" id="sl-b" min="-3" max="3" step="0.01" value="0">
     <div class="val" id="v-b">B = 0.00</div>
   </div>
 
-  <!-- Coulomb -->
+  <!-- Coil array -->
   <div>
-    <lbl>Coulomb Strength</lbl>
-    <input type="range" id="sl-k" min="0.1" max="6" step="0.1" value="1.2">
-    <div class="val" id="v-k">k = 1.2</div>
+    <lbl>Coil Array — B_z per coil</lbl>
+    <div class="coil-grid" id="coil-grid"><!-- built by JS --></div>
   </div>
 
   <!-- Damping -->
@@ -198,20 +203,29 @@ window.addEventListener('resize', resize);
 
 // ─── Particle species ─────────────────────────────────────
 const SPECIES = {
-  'e':  { label: 'e⁻',  mass: 0.04, charge: -1, color: '#4477ff', glow: [60,100,255],  r: 3   },
-  'H':  { label: '¹H',  mass: 1,    charge:  1, color: '#ff8844', glow: [255,136,68],   r: 4.5 },
-  'D':  { label: '²D',  mass: 2,    charge:  1, color: '#44ccff', glow: [68,200,255],   r: 5.5 },
-  'T':  { label: '³T',  mass: 3,    charge:  1, color: '#44ffaa', glow: [68,255,170],   r: 6   },
-  'He': { label: '⁴He', mass: 4,    charge:  2, color: '#ffee44', glow: [255,238,68],   r: 7   },
+  'e':   { label: 'e⁻',  mass: 0.04, charge: -1, color: '#4477ff', glow: [60,100,255],  r: 3   },
+  'H':   { label: '¹H',  mass: 1,    charge:  1, color: '#ff8844', glow: [255,136,68],   r: 4.5 },
+  'D':   { label: '²D',  mass: 2,    charge:  1, color: '#44ccff', glow: [68,200,255],   r: 5.5 },
+  'T':   { label: '³T',  mass: 3,    charge:  1, color: '#44ffaa', glow: [68,255,170],   r: 6   },
+  'He3': { label: '³He', mass: 3,    charge:  2, color: '#ff55cc', glow: [255,85,200],   r: 6   },
+  'He':  { label: '⁴He', mass: 4,    charge:  2, color: '#ffee44', glow: [255,238,68],   r: 7   },
+  'B11': { label: '¹¹B', mass: 11,   charge:  5, color: '#aa55ff', glow: [170,85,255],   r: 9   },
 };
 
-// Fusion reactions: key = sorted(typeA, typeB).join('+')
+// Fusion reactions: key = [typeA,typeB].sort().join('+')
+// neutronic: fast neutron escapes (shown with green flash)
+// byproduct / byproduct2 / triple: additional product particles
 const REACTIONS = {
-  'D+T':   { product: 'He', kick: 9,  name: 'D+T → ⁴He' },
-  'D+D':   { product: 'T',  kick: 5,  name: 'D+D → ³T'  },
-  'H+H':   { product: 'D',  kick: 2.5,name: 'H+H → ²D'  },
-  'H+T':   { product: 'He', kick: 6,  name: 'H+T → ⁴He' },
-  'H+D':   { product: 'T',  kick: 4,  name: 'H+D → ³T'  },
+  // ── Neutronic ─────────────────────────────────────────
+  'D+T':     { product: 'He',  kick: 9,   name: 'D+T → ⁴He+n',      neutronic: true  },
+  'D+D':     { product: 'He3', kick: 4,   name: 'D+D → ³He+n',       neutronic: true  },
+  // ── Aneutronic ────────────────────────────────────────
+  'H+H':     { product: 'D',   kick: 2.5, name: 'H+H → ²D'                             },
+  'H+T':     { product: 'He',  kick: 6,   name: 'H+T → ⁴He'                            },
+  'D+H':     { product: 'T',   kick: 4,   name: 'D+H → ³T'                              },
+  'D+He3':   { product: 'He',  kick: 10,  name: 'D+³He → ⁴He+p',     byproduct: 'H'   },
+  'B11+H':   { product: 'He',  kick: 8,   name: 'p+¹¹B → 3⁴He',      triple: true     },
+  'He3+He3': { product: 'He',  kick: 6,   name: '³He+³He → ⁴He+2p',  byproduct2: 'H'  },
 };
 
 // ─── Simulation constants ──────────────────────────────────
@@ -247,6 +261,42 @@ const INJECT_CAP = 400;    // max particles before injection pauses
 // Map slider 0-10 → frame interval and batch size
 function rateToEvery(r) { return r <= 0 ? 0 : Math.max(8, Math.round(80 / r)); }
 function rateToCount(r) { return r <= 0 ? 0 : Math.max(1, Math.round(r / 2)); }
+
+// ─── Coil array ───────────────────────────────────────────
+const N_COILS = 6;
+let bCoils = new Array(N_COILS).fill(0);
+
+function coilPositions() {
+  const W = canvas.width, H = canvas.height;
+  const positions = [];
+  if (geometry === 'ring') {
+    const Rm = Math.min(W,H) * (RING_INNER_FRAC + RING_OUTER_FRAC) / 2;
+    for (let i = 0; i < N_COILS; i++) {
+      const a = (2*Math.PI*i) / N_COILS;
+      positions.push({ x: W/2 + Rm*Math.cos(a), y: H/2 + Rm*Math.sin(a) });
+    }
+  } else {
+    for (let i = 0; i < N_COILS; i++) {
+      positions.push({ x: W*(i+1)/(N_COILS+1), y: H/2 });
+    }
+  }
+  return positions;
+}
+
+function getLocalB(px, py) {
+  const W = canvas.width, H = canvas.height;
+  const sigma2 = geometry === 'ring'
+    ? Math.pow(Math.min(W,H) * 0.16, 2)
+    : Math.pow(W / (N_COILS + 1) * 0.9, 2);
+  const pos = coilPositions();
+  let total = B;
+  for (let i = 0; i < N_COILS; i++) {
+    if (bCoils[i] === 0) continue;
+    const dx = px - pos[i].x, dy = py - pos[i].y;
+    total += bCoils[i] * Math.exp(-(dx*dx + dy*dy) / sigma2);
+  }
+  return total;
+}
 
 // ─── Particle class ───────────────────────────────────────
 class Particle {
@@ -362,12 +412,33 @@ function applyTemperature(newT) {
   temperature = newT;
 }
 
-wire('sl-temp',   'v-temp',   v => `T = ${v.toFixed(1)}`,                  applyTemperature);
-wire('sl-b',      'v-b',      v => `B = ${v.toFixed(2)}`,                  v => B = v);
-wire('sl-k',      'v-k',      v => `k = ${v.toFixed(1)}`,                  v => k = v);
-wire('sl-damp',   'v-damp',   v => v.toFixed(3),                            v => damping = v);
-wire('sl-inject', 'v-inject', v => v <= 0 ? 'Off' : v.toFixed(1),          v => { injectRate = v; injectEvery = rateToEvery(v); });
-wire('sl-exhaust','v-exhaust',v => v <= 0 ? 'Off' : v.toFixed(1),          v => exhaustEvery = rateToEvery(v));
+wire('sl-temp',   'v-temp',   v => `T = ${v.toFixed(1)}`,         applyTemperature);
+wire('sl-b',      'v-b',      v => `B = ${v.toFixed(2)}`,         v => B = v);
+wire('sl-damp',   'v-damp',   v => v.toFixed(3),                   v => damping = v);
+wire('sl-inject', 'v-inject', v => v <= 0 ? 'Off' : v.toFixed(1), v => { injectRate = v; injectEvery = rateToEvery(v); });
+wire('sl-exhaust','v-exhaust',v => v <= 0 ? 'Off' : v.toFixed(1), v => exhaustEvery = rateToEvery(v));
+
+// Build coil sliders
+(function buildCoilUI() {
+  const grid = document.getElementById('coil-grid');
+  for (let i = 0; i < N_COILS; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'coil-cell';
+    const lbl = document.createElement('lbl');
+    lbl.textContent = `C${i+1}`;
+    const sl  = document.createElement('input');
+    sl.type = 'range'; sl.min = -3; sl.max = 3; sl.step = 0.01; sl.value = 0;
+    sl.style.width = '100%';
+    const cv  = document.createElement('div');
+    cv.className = 'cv'; cv.textContent = '0.00';
+    sl.addEventListener('input', () => {
+      bCoils[i] = parseFloat(sl.value);
+      cv.textContent = bCoils[i].toFixed(2);
+    });
+    cell.appendChild(lbl); cell.appendChild(sl); cell.appendChild(cv);
+    grid.appendChild(cell);
+  }
+})();
 
 // Sync slider display to JS value
 function syncSlider(id, valId, fmt, val) {
@@ -538,8 +609,9 @@ function step() {
   for (let i = 0; i < n; i++) {
     const p = particles[i];
     // Lorentz: F = q(v × B), B along z → Fx=qvyB, Fy=−qvxB
-    const fmx = p.charge * p.vy * B;
-    const fmy = -p.charge * p.vx * B;
+    const localB = getLocalB(p.x, p.y);
+    const fmx = p.charge * p.vy * localB;
+    const fmy = -p.charge * p.vx * localB;
     const ax  = (fx[i] + fmx) / p.mass;
     const ay  = (fy[i] + fmy) / p.mass;
 
@@ -648,35 +720,46 @@ function checkFusion() {
       if (dx*dx + dy*dy > FUSION_R*FUSION_R) continue;
       if (Math.random() > FUSION_PROB)        continue;
 
-      // Conserve center-of-mass momentum, add kick
+      const mx  = (pi.x + pj.x) / 2, my = (pi.y + pj.y) / 2;
       const M   = pi.mass + pj.mass;
       const cmx = (pi.mass*pi.vx + pj.mass*pj.vx) / M;
       const cmy = (pi.mass*pi.vy + pj.mass*pj.vy) / M;
       const ang = Math.random() * 2 * Math.PI;
 
-      const prod = new Particle(
-        (pi.x + pj.x) / 2, (pi.y + pj.y) / 2,
-        cmx + rxn.kick * Math.cos(ang),
-        cmy + rxn.kick * Math.sin(ang),
-        rxn.product
-      );
+      if (rxn.triple) {
+        // p+¹¹B → 3⁴He: three alpha particles emitted isotropically
+        for (let a = 0; a < 3; a++) {
+          const a2 = Math.random() * 2*Math.PI;
+          add.push(new Particle(mx + gauss()*3, my + gauss()*3,
+            cmx + rxn.kick * Math.cos(a2), cmy + rxn.kick * Math.sin(a2), rxn.product));
+        }
+      } else {
+        add.push(new Particle(mx, my,
+          cmx + rxn.kick * Math.cos(ang), cmy + rxn.kick * Math.sin(ang), rxn.product));
+        if (rxn.byproduct) {
+          // one proton byproduct in opposite direction
+          add.push(new Particle(mx, my,
+            cmx - rxn.kick * 0.5 * Math.cos(ang),
+            cmy - rxn.kick * 0.5 * Math.sin(ang), rxn.byproduct));
+        }
+        if (rxn.byproduct2) {
+          // two proton byproducts (³He+³He → ⁴He + 2p)
+          for (let a = 0; a < 2; a++) {
+            const a2 = ang + Math.PI * (0.6 + a * 0.8);
+            add.push(new Particle(mx + gauss()*3, my + gauss()*3,
+              cmx + rxn.kick * 0.4 * Math.cos(a2),
+              cmy + rxn.kick * 0.4 * Math.sin(a2), rxn.byproduct2));
+          }
+        }
+      }
 
-      add.push(prod);
-      remove.add(i);
-      remove.add(j);
-
-      flashes.push({
-        x: prod.x, y: prod.y,
-        r: 0, maxR: 80,
-        alpha: 1.0,
-        name: rxn.name
-      });
+      remove.add(i); remove.add(j);
+      flashes.push({ x: mx, y: my, r: 0, alpha: 1.0, name: rxn.name, neutronic: !!rxn.neutronic });
       fusionCount++;
       break;
     }
   }
 
-  // Remove in reverse index order
   [...remove].sort((a, b) => b - a).forEach(i => particles.splice(i, 1));
   particles.push(...add);
 }
@@ -803,20 +886,52 @@ function draw() {
   // Particles
   for (const p of particles) drawParticle(p);
 
-  // Fusion flashes
+  // Coil indicators
+  if (bCoils.some(b => Math.abs(b) > 0.01)) {
+    const pos = coilPositions();
+    ctx.save();
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < N_COILS; i++) {
+      if (Math.abs(bCoils[i]) < 0.01) continue;
+      const { x, y } = pos[i];
+      const t = Math.min(1, Math.abs(bCoils[i]) / 3);
+      const [cr, cg, cb] = bCoils[i] > 0 ? [255,80,80] : [80,140,255];
+      ctx.beginPath(); ctx.arc(x, y, 8 + t*5, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.15 + t*0.15})`;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(${cr},${cg},${cb},${0.5 + t*0.3})`;
+      ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = `rgba(${cr},${cg},${cb},0.95)`;
+      ctx.fillText(bCoils[i] > 0 ? '⊙' : '⊗', x, y);
+    }
+    ctx.textBaseline = 'alphabetic';
+    ctx.restore();
+  }
+
+  // Fusion flashes — aneutronic: orange/yellow; neutronic: green (neutron radiation)
   for (const f of flashes) {
     if (f.r <= 0) continue;
     const grd = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r);
-    grd.addColorStop(0,   `rgba(255,255,220,${f.alpha * 0.95})`);
-    grd.addColorStop(0.25,`rgba(255,220, 60,${f.alpha * 0.6})`);
-    grd.addColorStop(0.6, `rgba(255, 80,  0,${f.alpha * 0.3})`);
-    grd.addColorStop(1,   `rgba(255, 40,  0,0)`);
+    if (f.neutronic) {
+      grd.addColorStop(0,   `rgba(200,255,200,${f.alpha * 0.95})`);
+      grd.addColorStop(0.25,`rgba( 80,255,120,${f.alpha * 0.6})`);
+      grd.addColorStop(0.6, `rgba(  0,160, 60,${f.alpha * 0.3})`);
+      grd.addColorStop(1,   `rgba(  0, 60,  0,0)`);
+    } else {
+      grd.addColorStop(0,   `rgba(255,255,220,${f.alpha * 0.95})`);
+      grd.addColorStop(0.25,`rgba(255,220, 60,${f.alpha * 0.6})`);
+      grd.addColorStop(0.6, `rgba(255, 80,  0,${f.alpha * 0.3})`);
+      grd.addColorStop(1,   `rgba(255, 40,  0,0)`);
+    }
     ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI*2);
     ctx.fillStyle = grd; ctx.fill();
 
-    // Label
     if (f.alpha > 0.6) {
-      ctx.fillStyle = `rgba(255,240,150,${(f.alpha - 0.6) * 2.5})`;
+      ctx.fillStyle = f.neutronic
+        ? `rgba(160,255,160,${(f.alpha-0.6)*2.5})`
+        : `rgba(255,240,150,${(f.alpha-0.6)*2.5})`;
       ctx.font = 'bold 11px Segoe UI, system-ui';
       ctx.textAlign = 'center';
       ctx.fillText(f.name, f.x, f.y - f.r * 0.5 - 4);
