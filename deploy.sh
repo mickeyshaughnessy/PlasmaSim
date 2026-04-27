@@ -15,6 +15,8 @@ rsync -avz --exclude='.git' --exclude='node_modules' --exclude='data/*.json' \
 ssh -i "$SSH_KEY" "$SERVER" "
   cd $DEPLOY_PATH
   npm install --production
+  mkdir -p $DEPLOY_PATH/plasma
+  cp $DEPLOY_PATH/plasma.html $DEPLOY_PATH/plasma/index.html
   systemctl restart plasmasim
   sleep 2
   systemctl is-active plasmasim
